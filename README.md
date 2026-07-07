@@ -131,26 +131,3 @@ A unit test suite validates database, math, and encoder logic. You do not need a
 # Activate virtual environment and run tests
 .venv\Scripts\pytest
 ```
-
----
-
-## 🐳 Docker Deployment
-
-### Build the Image
-```bash
-docker build -t face-attendance .
-```
-
-### Run the Container
-Streamlit applications inside a container require port mapping.
-```bash
-docker run -p 8501:8501 face-attendance
-```
-
-> [!IMPORTANT]
-> **Webcam inside Docker:** Container environments do not have automatic access to host hardware.
-> *   **Linux:** Pass the device node:
->     ```bash
->     docker run -p 8501:8501 --device=/dev/video0 face-attendance
->     ```
-> *   **Windows / macOS:** Docker Desktop does not natively support USB camera passthrough. If run inside a container on these platforms, use the **Fallback File Upload** in the dashboard to process images/videos.
