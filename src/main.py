@@ -7,7 +7,9 @@ from datetime import datetime, timedelta
 
 from database import (
     init_db, add_user, get_user_by_name, log_attendance, 
-    get_attendance_today, get_all_users, delete_user, get_ist_now
+    get_attendance_today, get_all_users, delete_user, get_ist_now,
+    authenticate_user, get_user_by_login_id, get_last_attendance,
+    get_setting, update_setting
 )
 from detector import FaceDetector
 from encoder import FaceEncoder
@@ -140,6 +142,10 @@ if 'last_attendance_marked' not in st.session_state:
     st.session_state.last_attendance_marked = None  # (user_name, time)
 if 'camera_running' not in st.session_state:
     st.session_state.camera_running = False
+if 'user' not in st.session_state:
+    st.session_state.user = None
+if 'attendance_success' not in st.session_state:
+    st.session_state.attendance_success = False
 
 # ----------------- HELPER FUNCTIONS -----------------
 def reset_liveness_states():
@@ -186,360 +192,428 @@ def check_liveness_conditions(ear: float, yaw_ratio: float, mode: str):
     else:  # "None"
         st.session_state.liveness_verified = True
 
-# ----------------- SIDEBAR CONFIG -----------------
-st.sidebar.markdown("<h2 style='color:#818cf8;'>🛠️ Configuration</h2>", unsafe_allow_html=True)
+# ----------------- SUCCESS POPUP OVERLAY -----------------
+if st.session_state.attendance_success:
+    st.markdown("""
+    <div style="
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background-color: rgba(16, 185, 129, 0.95);
+        color: white;
+        padding: 2.5rem;
+        border-radius: 20px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+        z-index: 99999;
+        text-align: center;
+        backdrop-filter: blur(12px);
+        border: 2px solid rgba(255, 255, 255, 0.2);
+        animation: fadeIn 0.4s ease;
+    ">
+        <h2 style="color: white; margin-top: 0;">🎉 Checked In!</h2>
+        <p style="font-size: 1.25rem; font-weight: 500; margin-bottom: 0;">Attendance Marked Successfully!</p>
+    </div>
+    <style>
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translate(-50%, -45%); }
+            to { opacity: 1; transform: translate(-50%, -50%); }
+        }
+    </style>
+    """, unsafe_allow_html=True)
+    time.sleep(3.0)
+    st.session_state.attendance_success = False
+    st.rerun()
 
-similarity_threshold = st.sidebar.slider(
-    "Face Match Threshold",
-    min_value=0.3, max_value=0.8, value=0.5, step=0.05,
-    help="Higher threshold is stricter, preventing false positives."
-)
+# ----------------- LOGIN / SECURITY ROUTING -----------------
+if st.session_state.user is None:
+    st.markdown("<div style='text-align: center; margin-top: 3rem;'>", unsafe_allow_html=True)
+    st.markdown("<h1 class='main-title' style='text-align: center;'>🔑 BioAccess Portal Login</h1>", unsafe_allow_html=True)
+    st.markdown("<div class='subtitle' style='text-align: center;'>Select your portal below and enter your credentials</div>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        tab_student_login, tab_admin_login = st.tabs(["🎓 Student Login", "🏢 Admin Login"])
+        
+        with tab_student_login:
+            with st.form("student_login_form"):
+                student_id = st.text_input("Student Login ID", placeholder="e.g. roll_number").strip()
+                student_pwd = st.text_input("Student Password", type="password", placeholder="Password").strip()
+                student_btn = st.form_submit_button("Log In to Student Portal", use_container_width=True)
+                
+                if student_btn:
+                    if not student_id or not student_pwd:
+                        st.error("Please fill in both Student Login ID and Password.")
+                    else:
+                        user = authenticate_user(student_id, student_pwd)
+                        if user and user['role'] == 'student':
+                            st.session_state.user = user
+                            st.success(f"Welcome back, {user['name']}!")
+                            time.sleep(1.0)
+                            st.rerun()
+                        elif user and user['role'] != 'student':
+                            st.error("Access Denied: This account is not a student account.")
+                        else:
+                            st.error("Invalid Login ID or Password.")
+                            
+        with tab_admin_login:
+            with st.form("admin_login_form"):
+                admin_id = st.text_input("Admin Login ID", placeholder="Admin ID").strip()
+                admin_pwd = st.text_input("Admin Password", type="password", placeholder="Password").strip()
+                admin_btn = st.form_submit_button("Log In to Admin Portal", use_container_width=True)
+                
+                if admin_btn:
+                    if not admin_id or not admin_pwd:
+                        st.error("Please fill in both Admin Login ID and Password.")
+                    else:
+                        user = authenticate_user(admin_id, admin_pwd)
+                        if user and user['role'] == 'admin':
+                            st.session_state.user = user
+                            st.success("Admin authenticated successfully!")
+                            time.sleep(1.0)
+                            st.rerun()
+                        elif user and user['role'] != 'admin':
+                            st.error("Access Denied: This account is not an admin account.")
+                        else:
+                            st.error("Invalid Login ID or Password.")
+    st.stop()
 
-liveness_mode = st.sidebar.selectbox(
-    "Liveness Verification Type",
-    ["Blink Only", "Head Turn Only", "Blink & Head Turn", "None"],
-    help="Choose the anti-spoofing criteria."
+# Load Global Settings from database
+similarity_threshold = float(get_setting("similarity_threshold", "0.5"))
+liveness_mode = get_setting("liveness_mode", "Blink & Head Turn")
+
+# Sidebar profile and Logout
+st.sidebar.markdown("<h2 style='color:#818cf8;'>👤 Profile Details</h2>", unsafe_allow_html=True)
+st.sidebar.write(f"**Name:** {st.session_state.user['name']}")
+st.sidebar.write(f"**Login ID:** {st.session_state.user['login_id']}")
+
+role_label = st.session_state.user['role'].upper()
+role_color = "#38bdf8" if st.session_state.user['role'] == "admin" else "#818cf8"
+st.sidebar.markdown(
+    f"<span style='background-color:{role_color}22; color:{role_color}; padding:0.25rem 0.6rem; border-radius:4px; font-weight:bold; font-size:0.85rem;'>{role_label} PORTAL</span>",
+    unsafe_allow_html=True
 )
 
 st.sidebar.markdown("---")
-st.sidebar.markdown("""
-### 💡 How to verify
-1. **Blink Only:** Look at the camera and blink naturally.
-2. **Head Turn Only:** Turn your head slightly left or right.
-3. **Blink & Head Turn:** Blink once and turn your head.
-""")
+if st.sidebar.button("🔓 Logout", use_container_width=True):
+    st.session_state.user = None
+    st.session_state.camera_running = False
+    reset_liveness_states()
+    st.rerun()
 
-# ----------------- MAIN UI -----------------
-st.markdown("<h1 class='main-title'>🏢 BioAccess AI</h1>", unsafe_allow_html=True)
-st.markdown("<div class='subtitle'>Production-Grade Real-Time Face Recognition Attendance System</div>", unsafe_allow_html=True)
-
-# Tabs
-tab_attendance, tab_enroll, tab_logs = st.tabs([
-    "📸 Real-Time Attendance", 
-    "👤 Register Employee", 
-    "📋 Attendance Reports"
-])
-
-# ----------------- TAB 1: ATTENDANCE -----------------
-with tab_attendance:
-    col_left, col_right = st.columns([2, 1])
-
-    with col_right:
-        st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
-        st.markdown("<div class='metric-title'>System Status</div>", unsafe_allow_html=True)
-        if st.session_state.camera_running:
-            st.markdown("<div class='metric-value' style='color:#10b981;'>● Active Feed</div>", unsafe_allow_html=True)
-        else:
-            st.markdown("<div class='metric-value' style='color:#ef4444;'>○ Standby</div>", unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-
-        # Liveness progress visualizer
-        st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
-        st.markdown("<div class='metric-title'>Anti-Spoofing Checklist</div>", unsafe_allow_html=True)
+# ----------------- ADMIN PORTAL -----------------
+if st.session_state.user['role'] == "admin":
+    st.markdown("<h1 class='main-title'>🏢 Admin Control Panel</h1>", unsafe_allow_html=True)
+    st.markdown("<div class='subtitle'>Manage student directory, set face threshold criteria, and inspect reports</div>", unsafe_allow_html=True)
+    
+    tab_enroll, tab_settings, tab_students, tab_logs = st.tabs([
+        "👤 Register Student",
+        "⚙️ Threshold Settings",
+        "📋 Student Directory",
+        "📊 Attendance Reports"
+    ])
+    
+    # 1. REGISTER STUDENT
+    with tab_enroll:
+        st.markdown("### Add New Student Profile")
+        col_reg_form, col_reg_cam = st.columns([1, 1])
         
-        blink_status = "✅ Blink Detected" if st.session_state.liveness_blink else "❌ Blink Required"
-        head_status = f"✅ Head Turned ({st.session_state.head_turn_state})" if st.session_state.liveness_head else "❌ Head Turn Required"
-        
-        if liveness_mode in ["Blink Only", "Blink & Head Turn"]:
-            st.write(blink_status)
-        if liveness_mode in ["Head Turn Only", "Blink & Head Turn"]:
-            st.write(head_status)
-        if liveness_mode == "None":
-            st.write("🟢 Anti-spoofing disabled")
+        with col_reg_form:
+            reg_name = st.text_input("Full Name", placeholder="e.g. Utsav Kumar").strip()
+            reg_login = st.text_input("Login ID / Roll Number", placeholder="e.g. utsav2026").strip()
+            reg_password = st.text_input("Password", type="password", placeholder="e.g. studpwd123").strip()
             
-        if st.session_state.liveness_verified:
-            st.success("🟢 Liveness verified!")
-        st.markdown("</div>", unsafe_allow_html=True)
-
-        # Show feedback for last marked attendance
-        if st.session_state.last_attendance_marked:
-            name, timestamp = st.session_state.last_attendance_marked
-            st.markdown(f"""
-            <div class='success-banner'>
-                🎉 Attendance Logged!<br/>
-                <b>Employee:</b> {name}<br/>
-                <b>Time:</b> {timestamp.strftime('%H:%M:%S')}
-            </div>
-            """, unsafe_allow_html=True)
-
-    with col_left:
-        # Camera controls
-        btn_col1, btn_col2 = st.columns(2)
-        with btn_col1:
-            if not st.session_state.camera_running:
-                if st.button("▶️ Start Attendance Camera", use_container_width=True):
-                    st.session_state.camera_running = True
-                    reset_liveness_states()
-                    st.rerun()
-            else:
-                if st.button("⏹️ Stop Camera", use_container_width=True):
-                    st.session_state.camera_running = False
-                    st.rerun()
-
-        with btn_col2:
-            if st.button("🔄 Reset Liveness Check", use_container_width=True):
-                reset_liveness_states()
-
-        frame_placeholder = st.empty()
-
-        # Real-time processing loop
-        if st.session_state.camera_running:
-            cap = cv2.VideoCapture(0)
+            enroll_btn = st.button("📸 Capture & Enrol Student Face", disabled=not (reg_name and reg_login and reg_password))
             
-            if not cap.isOpened():
-                st.session_state.camera_running = False
-                frame_placeholder.error("⚠️ Local webcam unavailable. Check connection or browser permissions.")
-                
-                # FALLBACK UI: Static Image or Video upload
-                st.info("💡 Running in fallback mode. You can upload an image or video file below to verify attendance.")
-                uploaded_file = st.file_uploader("Upload employee face image for recognition", type=["jpg", "jpeg", "png"])
-                if uploaded_file is not None:
-                    file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
-                    image = cv2.imdecode(file_bytes, 1)
-                    
-                    # Process image
-                    # Perform detection (forced)
-                    face_meta = detector.process_frame(image, 0, force_process=True)
-                    if face_meta:
-                        # Draw bounding box
-                        x, y, w, h = face_meta['bbox']
-                        cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
-                        
-                        # Generate embedding
-                        emb = encoder.generate_embedding(image)
-                        if emb is not None:
-                            matched_name, similarity = encoder.find_match(emb, threshold=similarity_threshold)
-                            if matched_name:
-                                # Log attendance
-                                user = get_user_by_name(matched_name)
-                                if user:
-                                    # Check double marking
-                                    today_logs = get_attendance_today()
-                                    already_marked = any(log['name'] == matched_name for log in today_logs)
-                                    if not already_marked:
-                                        log_attendance(user['id'], liveness_method="Fallback (Upload)")
-                                        st.session_state.last_attendance_marked = (matched_name, get_ist_now())
-                                        st.success(f"Matched {matched_name} ({similarity*100:.1f}%) and logged attendance!")
-                                    else:
-                                        st.warning(f"{matched_name} has already logged attendance today.")
-                            else:
-                                st.error("Face not recognized in the database.")
-                        else:
-                            st.error("Failed to extract face features.")
+            if enroll_btn:
+                # Check login_id duplicate
+                if get_user_by_login_id(reg_login) is not None:
+                    st.error(f"❌ Login ID '{reg_login}' is already registered in the system.")
+                else:
+                    cap = cv2.VideoCapture(0)
+                    if not cap.isOpened():
+                        st.error("❌ Webcam is not accessible.")
                     else:
-                        st.error("No face detected in the image.")
-                    st.image(image, channels="BGR", caption="Processed Image", width=500)
-            else:
-                frame_count = 0
-                cooldown_timer = None
-                
-                while st.session_state.camera_running:
-                    ret, frame = cap.read()
-                    if not ret:
-                        st.error("Lost video feed.")
-                        break
-
-                    frame_count += 1
-                    
-                    # Detect face and liveness indicators
-                    face_meta = detector.process_frame(frame, frame_count)
-                    
-                    if face_meta:
-                        x, y, w, h = face_meta['bbox']
-                        ear = face_meta['ear']
-                        yaw_ratio = face_meta['yaw_ratio']
+                        for _ in range(10):
+                            cap.read()
+                        ret, frame = cap.read()
+                        cap.release()
                         
-                        # Apply liveness check logic
-                        if not st.session_state.liveness_verified:
-                            check_liveness_conditions(ear, yaw_ratio, liveness_mode)
-
-                        # Color coding bounding boxes based on liveness status
-                        if not st.session_state.liveness_verified:
-                            box_color = (0, 165, 255)  # Orange: Verifying liveness
-                            label = f"Verifying Liveness | EAR: {ear:.2f} | Yaw: {yaw_ratio:.2f}"
-                        else:
-                            box_color = (255, 0, 0)    # Blue: Verified liveness, looking for match
-                            label = "Liveness OK | Matching Face..."
-                            
-                            # Face Identification block
-                            # Process identification if cooldown is inactive
-                            if cooldown_timer is None or (time.time() - cooldown_timer) > 3.0:
-                                # Reset cooldown indicator
-                                if cooldown_timer is not None:
-                                    cooldown_timer = None
-                                    
+                        if ret:
+                            face_meta = detector.process_frame(frame, 0, force_process=True)
+                            if not face_meta:
+                                st.error("❌ No face detected. Make sure to look straight at the camera under clean lighting.")
+                            else:
                                 emb = encoder.generate_embedding(frame)
                                 if emb is not None:
-                                    matched_name, similarity = encoder.find_match(emb, threshold=similarity_threshold)
-                                    if matched_name:
-                                        # Match found! Log attendance
-                                        user = get_user_by_name(matched_name)
-                                        if user:
-                                            # Check duplicate logs today
-                                            today_logs = get_attendance_today()
-                                            # Filter logs of this user within last 5 minutes to avoid rapid double-taps
-                                            recent_marked = False
-                                            for log in today_logs:
-                                                if log['name'] == matched_name:
-                                                    log_time = datetime.strptime(log['timestamp'], "%Y-%m-%d %H:%M:%S")
-                                                    if get_ist_now() - log_time < timedelta(minutes=5):
-                                                        recent_marked = True
-                                                        break
-                                            
-                                            if not recent_marked:
-                                                log_attendance(user['id'], liveness_method=liveness_mode)
-                                                st.session_state.last_attendance_marked = (matched_name, get_ist_now())
-                                                box_color = (0, 255, 0)  # Green: Success
-                                                label = f"Welcome {matched_name} ({similarity*100:.1f}%)"
-                                                # Activate cooldown and reset liveness
-                                                cooldown_timer = time.time()
-                                                reset_liveness_states()
-                                                st.rerun()
-                                            else:
-                                                box_color = (0, 255, 255)  # Yellow
-                                                label = f"{matched_name} (Already Logged)"
-                                    else:
-                                        box_color = (0, 0, 255)  # Red: Unknown face
-                                        label = "Access Denied: Face Not Enrolled"
-                            else:
-                                # During cooldown
-                                box_color = (0, 255, 0)
-                                label = f"Success | Cooldown: {3.0 - (time.time() - cooldown_timer):.1f}s"
-
-                        # Draw HUD and overlay
-                        cv2.rectangle(frame, (x, y), (x + w, y + h), box_color, 2)
-                        cv2.putText(
-                            frame, label, (x, y - 10), 
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, box_color, 2
-                        )
-                    else:
-                        # No face in screen, reset partial liveness checks for clean tracking
-                        if not st.session_state.liveness_verified:
-                            # Partially reset to handle next detection smoothly
-                            st.session_state.eye_closed_streak = 0
-
-                    # Display image frame in Streamlit
-                    frame_placeholder.image(frame, channels="BGR", use_container_width=True)
-                    time.sleep(0.01)
-
-                cap.release()
-                reset_liveness_states()
-
-# ----------------- TAB 2: REGISTER EMPLOYEE -----------------
-with tab_enroll:
-    st.markdown("### 👤 Add New Employee to Database")
-    
-    col_reg_form, col_reg_cam = st.columns([1, 1])
-    
-    with col_reg_form:
-        new_user_name = st.text_input("Full Name", placeholder="e.g., Utsav Kumar").strip()
-        enroll_liveness = st.checkbox("Require Liveness Validation during registration", value=True)
-        
-        # State indicators
-        if 'enroll_image_captured' not in st.session_state:
-            st.session_state.enroll_image_captured = None
-        
-        enroll_btn = st.button("📸 Capture & Save Face Profile", disabled=not new_user_name)
-        
-        if enroll_btn and new_user_name:
-            # Check if name already registered in SQLite
-            user_check = get_user_by_name(new_user_name)
-            if user_check:
-                st.error(f"❌ User '{new_user_name}' is already registered in the system.")
-            else:
-                # Capture frame from camera
-                cap = cv2.VideoCapture(0)
-                if not cap.isOpened():
-                    st.error("⚠️ Failed to open webcam. Ensure no other apps are using it.")
-                else:
-                    # Let the camera adjust brightness briefly
-                    for _ in range(10):
-                        cap.read()
-                        
-                    ret, frame = cap.read()
-                    cap.release()
-                    
-                    if ret:
-                        # Process face detection
-                        face_meta = detector.process_frame(frame, 0, force_process=True)
-                        if not face_meta:
-                            st.error("❌ Registration Failed: No face detected in the frame. Please look directly at the camera.")
+                                    try:
+                                        encoder.save_embedding(reg_login, emb)
+                                        add_user(reg_name, reg_login, reg_password, role='student')
+                                        st.success(f"🎉 Success! Student '{reg_name}' enrolled successfully.")
+                                        time.sleep(1.5)
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(f"Error registering student: {e}")
+                                else:
+                                    st.error("❌ Failed to process facial features. Try again.")
                         else:
-                            # Generate embedding
-                            embedding = encoder.generate_embedding(frame)
-                            if embedding is not None:
-                                # Save embedding (.npy)
-                                try:
-                                    encoder.save_embedding(new_user_name, embedding)
-                                    # Save to SQLite db
-                                    add_user(new_user_name)
-                                    st.success(f"🎉 Success! Employee '{new_user_name}' has been successfully enrolled.")
-                                    time.sleep(1.5)
-                                    st.rerun()
-                                except Exception as e:
-                                    st.error(f"Error saving user profile: {e}")
-                            else:
-                                st.error("❌ Failed to process facial details. Please try again under better lighting.")
-                    else:
-                        st.error("❌ Could not acquire image frame from camera.")
+                            st.error("❌ Camera failed to capture a frame.")
+                            
+        with col_reg_cam:
+            st.info("💡 Enrolment Guidelines:\n- Ensure the student's face is centered in the camera feed.\n- Avoid strong background glare or dark shadows.")
 
-    with col_reg_cam:
-        st.markdown("#### Registered Employees List")
-        users = get_all_users()
-        if not users:
-            st.info("No employees registered yet.")
+    # 2. THRESHOLD SETTINGS
+    with tab_settings:
+        st.markdown("### Configure Face Match & Anti-Spoofing Parameters")
+        
+        sim_val = st.slider(
+            "Face Match Threshold",
+            min_value=0.3, max_value=0.8, value=similarity_threshold, step=0.05,
+            help="Higher values are stricter (fewer false positives, but harder to match)."
+        )
+        
+        live_val = st.selectbox(
+            "Liveness Verification Type",
+            ["Blink Only", "Head Turn Only", "Blink & Head Turn", "None"],
+            index=["Blink Only", "Head Turn Only", "Blink & Head Turn", "None"].index(liveness_mode),
+            help="Select the liveness rules required for valid authentication."
+        )
+        
+        if st.button("💾 Save Configuration", use_container_width=True):
+            update_setting("similarity_threshold", str(sim_val))
+            update_setting("liveness_mode", live_val)
+            st.success("System configurations updated successfully!")
+            time.sleep(1.0)
+            st.rerun()
+
+    # 3. STUDENT DIRECTORY
+    with tab_students:
+        st.markdown("### Registered Students Directory")
+        students = get_all_users()
+        if not students:
+            st.info("No students enrolled yet.")
         else:
-            for user in users:
-                user_col_name, user_col_del = st.columns([3, 1])
-                with user_col_name:
-                    st.write(f"👤 **{user['name']}** (Joined: {user['created_at'][:10]})")
-                with user_col_del:
-                    if st.button("🗑️ Delete", key=f"del_{user['id']}"):
-                        # Remove files
-                        encoder.delete_embedding(user['name'])
-                        delete_user(user['id'])
-                        st.success(f"Deleted {user['name']}.")
+            for s in students:
+                c1, c2, c3 = st.columns([3, 2, 1])
+                with c1:
+                    st.write(f"👤 **{s['name']}** (Login ID: `{s['login_id']}`)")
+                with c2:
+                    st.write(f"📅 Enrolled: {s['created_at'][:16]}")
+                with c3:
+                    if st.button("🗑️ Delete", key=f"del_{s['id']}", use_container_width=True):
+                        encoder.delete_embedding(s['login_id'])
+                        delete_user(s['id'])
+                        st.success(f"Removed {s['name']}.")
                         time.sleep(0.5)
                         st.rerun()
 
-# ----------------- TAB 3: REPORTS -----------------
-with tab_logs:
-    st.markdown("### 📋 Today's Attendance logs")
+    # 4. ATTENDANCE REPORTS
+    with tab_logs:
+        st.markdown("### Attendance Logs (Today)")
+        logs = get_attendance_today()
+        
+        col_stat1, col_stat2 = st.columns(2)
+        students = get_all_users()
+        
+        with col_stat1:
+            st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
+            st.markdown("<div class='metric-title'>Total Enrolled Students</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='metric-value'>{len(students)}</div>", unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+            
+        with col_stat2:
+            st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
+            st.markdown("<div class='metric-title'>Attendances Logged Today</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='metric-value'>{len(logs)}</div>", unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+            
+        if not logs:
+            st.info("No attendance logged today.")
+        else:
+            import pandas as pd
+            df = pd.DataFrame(logs)
+            df.columns = ["Log ID", "Student Name", "Log Time", "Liveness Mode"]
+            df["Log Time"] = pd.to_datetime(df["Log Time"]).dt.strftime("%Y-%m-%d %H:%M:%S")
+            st.dataframe(df, use_container_width=True)
+            
+            csv = df.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="📥 Download Today's Reports as CSV",
+                data=csv,
+                file_name=f"attendance_report_{get_ist_now().strftime('%Y-%m-%d')}.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
+
+# ----------------- STUDENT PORTAL -----------------
+else:
+    st.markdown("<h1 class='main-title'>🎓 Student Dashboard</h1>", unsafe_allow_html=True)
+    st.markdown(f"<div class='subtitle'>Hello, {st.session_state.user['name']}! Authenticate your attendance securely below.</div>", unsafe_allow_html=True)
     
-    col_stat1, col_stat2 = st.columns(2)
-    logs = get_attendance_today()
-    users = get_all_users()
+    # 6-Hour Cooldown Verification
+    last_log = get_last_attendance(st.session_state.user['id'])
+    now = get_ist_now()
     
-    with col_stat1:
+    can_mark = True
+    cooldown_rem = None
+    
+    if last_log is not None:
+        diff = now - last_log
+        if diff < timedelta(hours=6):
+            can_mark = False
+            cooldown_rem = timedelta(hours=6) - diff
+            
+    if not can_mark:
         st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
-        st.markdown("<div class='metric-title'>Total Registered Employees</div>", unsafe_allow_html=True)
-        st.markdown(f"<div class='metric-value'>{len(users)}</div>", unsafe_allow_html=True)
+        st.markdown("<div class='metric-title' style='color:#ef4444;'>🚫 Cooldown Active</div>", unsafe_allow_html=True)
+        
+        tot_secs = int(cooldown_rem.total_seconds())
+        h, rem = divmod(tot_secs, 3600)
+        m, s = divmod(rem, 60)
+        
+        st.markdown(f"<div class='metric-value'>{h:02d}h {m:02d}m {s:02d}s</div>", unsafe_allow_html=True)
+        st.write("You have already logged your attendance. Repeated attendance is disabled for 6 hours.")
         st.markdown("</div>", unsafe_allow_html=True)
         
-    with col_stat2:
-        st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
-        st.markdown("<div class='metric-title'>Logged Attendances Today</div>", unsafe_allow_html=True)
-        st.markdown(f"<div class='metric-value'>{len(logs)}</div>", unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
+        st.info(f"Last logged at: **{last_log.strftime('%Y-%m-%d %H:%M:%S')} (IST)**")
         
-    if not logs:
-        st.info("No attendance logged today.")
     else:
-        # Display logs in table
-        import pandas as pd
-        df = pd.DataFrame(logs)
-        # Rename columns for cleaner display
-        df.columns = ["Log ID", "Employee Name", "Log Time", "Liveness Check Mode"]
-        # Format Log Time to clean timestamp format
-        df["Log Time"] = pd.to_datetime(df["Log Time"]).dt.strftime("%Y-%m-%d %H:%M:%S")
-        st.dataframe(df, use_container_width=True)
+        col_left, col_right = st.columns([2, 1])
         
-        # Download reports as CSV button
-        csv = df.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            label="📥 Download Today's Logs as CSV",
-            data=csv,
-            file_name=f"attendance_report_{get_ist_now().strftime('%Y-%m-%d')}.csv",
-            mime="text/csv",
-            use_container_width=True
-        )
+        with col_right:
+            st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
+            st.markdown("<div class='metric-title'>System Status</div>", unsafe_allow_html=True)
+            if st.session_state.camera_running:
+                st.markdown("<div class='metric-value' style='color:#10b981;'>● Active Feed</div>", unsafe_allow_html=True)
+            else:
+                st.markdown("<div class='metric-value' style='color:#38bdf8;'>○ Eligible</div>", unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+            
+            st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
+            st.markdown("<div class='metric-title'>Anti-Spoofing Checklist</div>", unsafe_allow_html=True)
+            
+            b_chk = "✅ Blink Detected" if st.session_state.liveness_blink else "❌ Blink Required"
+            h_chk = f"✅ Head Turned ({st.session_state.head_turn_state})" if st.session_state.liveness_head else "❌ Head Turn Required"
+            
+            if liveness_mode in ["Blink Only", "Blink & Head Turn"]:
+                st.write(b_chk)
+            if liveness_mode in ["Head Turn Only", "Blink & Head Turn"]:
+                st.write(h_chk)
+            if liveness_mode == "None":
+                st.write("🟢 Anti-spoofing disabled")
+                
+            if st.session_state.liveness_verified:
+                st.success("🟢 Liveness verified!")
+            st.markdown("</div>", unsafe_allow_html=True)
+            
+        with col_left:
+            btn_col1, btn_col2 = st.columns(2)
+            with btn_col1:
+                if not st.session_state.camera_running:
+                    if st.button("▶️ Start Attendance Camera", use_container_width=True):
+                        st.session_state.camera_running = True
+                        reset_liveness_states()
+                        st.rerun()
+                else:
+                    if st.button("⏹️ Stop Camera", use_container_width=True):
+                        st.session_state.camera_running = False
+                        st.rerun()
+            with btn_col2:
+                if st.button("🔄 Reset Liveness Check", use_container_width=True):
+                    reset_liveness_states()
+                    
+            frame_placeholder = st.empty()
+            
+            if st.session_state.camera_running:
+                cap = cv2.VideoCapture(0)
+                student_emb_path = os.path.join("data/embeddings", f"{st.session_state.user['login_id']}.npy")
+                
+                if not os.path.exists(student_emb_path):
+                    st.session_state.camera_running = False
+                    frame_placeholder.error("⚠️ Face profile not registered. Please contact the administrator to enrol your face profile.")
+                elif not cap.isOpened():
+                    st.session_state.camera_running = False
+                    frame_placeholder.error("⚠️ Webcam unavailable. Verify your camera settings.")
+                    
+                    # Fallback
+                    st.info("💡 Fallback Mode: Upload your photo to verify.")
+                    uploaded_file = st.file_uploader("Upload Image Profile", type=["jpg", "jpeg", "png"])
+                    if uploaded_file is not None:
+                        file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
+                        image = cv2.imdecode(file_bytes, 1)
+                        face_meta = detector.process_frame(image, 0, force_process=True)
+                        if face_meta:
+                            emb = encoder.generate_embedding(image)
+                            if emb is not None:
+                                reg_emb = np.load(student_emb_path)
+                                sim = encoder.compare_embeddings(emb, reg_emb)
+                                if sim >= similarity_threshold:
+                                    log_attendance(st.session_state.user['id'], liveness_method="Fallback (Upload)")
+                                    st.session_state.attendance_success = True
+                                    st.session_state.camera_running = False
+                                    st.session_state.last_attendance_marked = (st.session_state.user['name'], get_ist_now())
+                                    st.rerun()
+                                else:
+                                    st.error("Face does not match your registered profile.")
+                            else:
+                                st.error("Failed to extract face features.")
+                        else:
+                            st.error("No face detected in upload.")
+                else:
+                    frame_count = 0
+                    reg_emb = np.load(student_emb_path)
+                    
+                    while st.session_state.camera_running:
+                        ret, frame = cap.read()
+                        if not ret:
+                            st.error("Lost webcam stream feed.")
+                            break
+                            
+                        frame_count += 1
+                        face_meta = detector.process_frame(frame, frame_count)
+                        
+                        if face_meta:
+                            x, y, w, h = face_meta['bbox']
+                            ear = face_meta['ear']
+                            yaw_ratio = face_meta['yaw_ratio']
+                            
+                            if not st.session_state.liveness_verified:
+                                check_liveness_conditions(ear, yaw_ratio, liveness_mode)
+                                
+                            if not st.session_state.liveness_verified:
+                                box_color = (0, 165, 255)
+                                label = f"Verifying Liveness | EAR: {ear:.2f} | Yaw: {yaw_ratio:.2f}"
+                            else:
+                                box_color = (255, 0, 0)
+                                label = "Liveness OK | Matching Face..."
+                                
+                                emb = encoder.generate_embedding(frame)
+                                if emb is not None:
+                                    sim = encoder.compare_embeddings(emb, reg_emb)
+                                    if sim >= similarity_threshold:
+                                        log_attendance(st.session_state.user['id'], liveness_method=liveness_mode)
+                                        st.session_state.attendance_success = True
+                                        st.session_state.camera_running = False
+                                        st.session_state.last_attendance_marked = (st.session_state.user['name'], get_ist_now())
+                                        cap.release()
+                                        reset_liveness_states()
+                                        st.rerun()
+                                    else:
+                                        box_color = (0, 0, 255)
+                                        label = f"Match Failed: Not {st.session_state.user['name']}"
+                                else:
+                                    box_color = (0, 0, 255)
+                                    label = "Failed to extract face features."
+                                    
+                            cv2.rectangle(frame, (x, y), (x + w, y + h), box_color, 2)
+                            cv2.putText(frame, label, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, box_color, 2)
+                        else:
+                            if not st.session_state.liveness_verified:
+                                st.session_state.eye_closed_streak = 0
+                                
+                        frame_placeholder.image(frame, channels="BGR", use_container_width=True)
+                        time.sleep(0.01)
+                        
+                    cap.release()
+                    reset_liveness_states()

@@ -4,7 +4,9 @@ import sqlite3
 from datetime import datetime
 from src.database import (
     init_db, add_user, get_user_by_name, log_attendance,
-    get_attendance_today, get_all_users, delete_user
+    get_attendance_today, get_all_users, delete_user,
+    authenticate_user, get_user_by_login_id, get_last_attendance,
+    get_setting, update_setting
 )
 
 TEST_DB_PATH = "data/test_attendance.db"
@@ -42,23 +44,48 @@ def test_database_initialization():
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='attendance'")
     assert cursor.fetchone() is not None
     
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='settings'")
+    assert cursor.fetchone() is not None
+    
     conn.close()
 
 def test_add_and_get_user():
     """Tests registering new users and retrieving their records."""
     # Register user
-    user_id = add_user("Alice Smith", TEST_DB_PATH)
+    user_id = add_user("Alice Smith", "alicesmith", "password123", "student", TEST_DB_PATH)
     assert user_id > 0
     
-    # Retrieve user
+    # Retrieve user by name
     user = get_user_by_name("Alice Smith", TEST_DB_PATH)
     assert user is not None
     assert user["name"] == "Alice Smith"
+    assert user["login_id"] == "alicesmith"
     assert user["id"] == user_id
 
-    # Test duplicate username restriction
+    # Retrieve user by login_id
+    user2 = get_user_by_login_id("alicesmith", TEST_DB_PATH)
+    assert user2 is not None
+    assert user2["id"] == user_id
+
+    # Test duplicate login ID restriction
     with pytest.raises(ValueError, match="already registered"):
-        add_user("Alice Smith", TEST_DB_PATH)
+        add_user("Alice Double", "alicesmith", "anotherpwd", "student", TEST_DB_PATH)
+
+def test_authenticate_user():
+    """Tests authenticating a user with correct and incorrect credentials."""
+    add_user("Bob Jones", "bobjones", "mysecret123", "student", TEST_DB_PATH)
+    
+    # Successful authentication
+    user = authenticate_user("bobjones", "mysecret123", TEST_DB_PATH)
+    assert user is not None
+    assert user["name"] == "Bob Jones"
+    assert user["role"] == "student"
+
+    # Unsuccessful authentication (wrong password)
+    assert authenticate_user("bobjones", "wrongpwd", TEST_DB_PATH) is None
+    
+    # Unsuccessful authentication (wrong login id)
+    assert authenticate_user("nonexistent", "mysecret123", TEST_DB_PATH) is None
 
 def test_get_nonexistent_user():
     """Tests retrieval of an unregistered user returns None."""
@@ -67,7 +94,7 @@ def test_get_nonexistent_user():
 
 def test_log_and_fetch_attendance():
     """Tests logging attendance entries and querying them."""
-    user_id = add_user("Charlie Brown", TEST_DB_PATH)
+    user_id = add_user("Charlie Brown", "charlie", "pwd1", "student", TEST_DB_PATH)
     
     # Log attendance
     log_id = log_attendance(user_id, "Blink Only", TEST_DB_PATH)
@@ -79,10 +106,14 @@ def test_log_and_fetch_attendance():
     assert logs[0]["name"] == "Charlie Brown"
     assert logs[0]["liveness_method"] == "Blink Only"
 
+    # Get last attendance timestamp
+    last_time = get_last_attendance(user_id, TEST_DB_PATH)
+    assert last_time is not None
+
 def test_get_all_users():
     """Tests retrieving a list of all enrolled users in alphabetical order."""
-    add_user("Zack", TEST_DB_PATH)
-    add_user("Aaron", TEST_DB_PATH)
+    add_user("Zack", "zack", "pwd", "student", TEST_DB_PATH)
+    add_user("Aaron", "aaron", "pwd", "student", TEST_DB_PATH)
     
     users = get_all_users(TEST_DB_PATH)
     assert len(users) == 2
@@ -91,7 +122,7 @@ def test_get_all_users():
 
 def test_delete_user():
     """Tests deleting users and cascading delete verification."""
-    user_id = add_user("David Miller", TEST_DB_PATH)
+    user_id = add_user("David Miller", "david", "pwd", "student", TEST_DB_PATH)
     log_attendance(user_id, "None", TEST_DB_PATH)
     
     # Verify user exists
@@ -104,3 +135,18 @@ def test_delete_user():
     # Verify user and cascade logs are removed
     assert get_user_by_name("David Miller", TEST_DB_PATH) is None
     assert len(get_attendance_today(TEST_DB_PATH)) == 0
+
+def test_settings_persistence():
+    """Tests setting and getting custom configuration key-value pairs."""
+    # Test getting seeded setting
+    val = get_setting("similarity_threshold", "0.6", TEST_DB_PATH)
+    assert val == "0.5" # Seeded in init_db
+
+    # Update setting
+    update_setting("similarity_threshold", "0.7", TEST_DB_PATH)
+    val = get_setting("similarity_threshold", "0.6", TEST_DB_PATH)
+    assert val == "0.7"
+
+    # Nonexistent setting returns default
+    assert get_setting("nonexistent_key", "default_val", TEST_DB_PATH) == "default_val"
+
