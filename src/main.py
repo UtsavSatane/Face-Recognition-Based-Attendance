@@ -104,6 +104,36 @@ st.markdown("""
     .stButton>button:hover {
         opacity: 0.95;
     }
+    
+    /* Premium Portal Cards */
+    div[data-testid="stForm"] {
+        background: rgba(30, 41, 59, 0.6) !important;
+        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+        border-radius: 20px !important;
+        padding: 2rem !important;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25) !important;
+        backdrop-filter: blur(16px);
+        transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+    }
+    div[data-testid="stForm"]:hover {
+        transform: translateY(-4px);
+        border-color: rgba(99, 102, 241, 0.4) !important;
+        box-shadow: 0 15px 40px rgba(99, 102, 241, 0.15) !important;
+    }
+    .portal-header {
+        font-size: 1.6rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+        color: #f8fafc;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .portal-desc {
+        color: #94a3b8;
+        font-size: 0.9rem;
+        margin-bottom: 1.5rem;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -229,54 +259,56 @@ if st.session_state.attendance_success:
 if st.session_state.user is None:
     st.markdown("<div style='text-align: center; margin-top: 3rem;'>", unsafe_allow_html=True)
     st.markdown("<h1 class='main-title' style='text-align: center;'>🔑 BioAccess Portal Login</h1>", unsafe_allow_html=True)
-    st.markdown("<div class='subtitle' style='text-align: center;'>Select your portal below and enter your credentials</div>", unsafe_allow_html=True)
+    st.markdown("<div class='subtitle' style='text-align: center;'>Select your portal and enter your credentials</div>", unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
     
-    col1, col2, col3 = st.columns([1, 2, 1])
+    col_l, col1, col2, col_r = st.columns([1, 4, 4, 1])
+    
+    with col1:
+        with st.form("student_login_form"):
+            st.markdown("<div class='portal-header'>🎓 Student Portal</div>", unsafe_allow_html=True)
+            st.markdown("<div class='portal-desc'>Access your student dashboard and log attendance</div>", unsafe_allow_html=True)
+            student_id = st.text_input("Student Login ID", placeholder="e.g. roll_number").strip()
+            student_pwd = st.text_input("Student Password", type="password", placeholder="Password").strip()
+            student_btn = st.form_submit_button("Log In to Student Portal", use_container_width=True)
+            
+            if student_btn:
+                if not student_id or not student_pwd:
+                    st.error("Please fill in both Student Login ID and Password.")
+                else:
+                    user = authenticate_user(student_id, student_pwd)
+                    if user and user['role'] == 'student':
+                        st.session_state.user = user
+                        st.success(f"Welcome back, {user['name']}!")
+                        time.sleep(1.0)
+                        st.rerun()
+                    elif user and user['role'] != 'student':
+                        st.error("Access Denied: This account is not a student account.")
+                    else:
+                        st.error("Invalid Login ID or Password.")
+                        
     with col2:
-        tab_student_login, tab_admin_login = st.tabs(["🎓 Student Login", "🏢 Admin Login"])
-        
-        with tab_student_login:
-            with st.form("student_login_form"):
-                student_id = st.text_input("Student Login ID", placeholder="e.g. roll_number").strip()
-                student_pwd = st.text_input("Student Password", type="password", placeholder="Password").strip()
-                student_btn = st.form_submit_button("Log In to Student Portal", use_container_width=True)
-                
-                if student_btn:
-                    if not student_id or not student_pwd:
-                        st.error("Please fill in both Student Login ID and Password.")
+        with st.form("admin_login_form"):
+            st.markdown("<div class='portal-header'>🏢 Admin Portal</div>", unsafe_allow_html=True)
+            st.markdown("<div class='portal-desc'>Configure settings, register students, and view logs</div>", unsafe_allow_html=True)
+            admin_id = st.text_input("Admin Login ID", placeholder="Admin ID").strip()
+            admin_pwd = st.text_input("Admin Password", type="password", placeholder="Password").strip()
+            admin_btn = st.form_submit_button("Log In to Admin Portal", use_container_width=True)
+            
+            if admin_btn:
+                if not admin_id or not admin_pwd:
+                    st.error("Please fill in both Admin Login ID and Password.")
+                else:
+                    user = authenticate_user(admin_id, admin_pwd)
+                    if user and user['role'] == 'admin':
+                        st.session_state.user = user
+                        st.success("Admin authenticated successfully!")
+                        time.sleep(1.0)
+                        st.rerun()
+                    elif user and user['role'] != 'admin':
+                        st.error("Access Denied: This account is not an admin account.")
                     else:
-                        user = authenticate_user(student_id, student_pwd)
-                        if user and user['role'] == 'student':
-                            st.session_state.user = user
-                            st.success(f"Welcome back, {user['name']}!")
-                            time.sleep(1.0)
-                            st.rerun()
-                        elif user and user['role'] != 'student':
-                            st.error("Access Denied: This account is not a student account.")
-                        else:
-                            st.error("Invalid Login ID or Password.")
-                            
-        with tab_admin_login:
-            with st.form("admin_login_form"):
-                admin_id = st.text_input("Admin Login ID", placeholder="Admin ID").strip()
-                admin_pwd = st.text_input("Admin Password", type="password", placeholder="Password").strip()
-                admin_btn = st.form_submit_button("Log In to Admin Portal", use_container_width=True)
-                
-                if admin_btn:
-                    if not admin_id or not admin_pwd:
-                        st.error("Please fill in both Admin Login ID and Password.")
-                    else:
-                        user = authenticate_user(admin_id, admin_pwd)
-                        if user and user['role'] == 'admin':
-                            st.session_state.user = user
-                            st.success("Admin authenticated successfully!")
-                            time.sleep(1.0)
-                            st.rerun()
-                        elif user and user['role'] != 'admin':
-                            st.error("Access Denied: This account is not an admin account.")
-                        else:
-                            st.error("Invalid Login ID or Password.")
+                        st.error("Invalid Login ID or Password.")
     st.stop()
 
 # Load Global Settings from database
