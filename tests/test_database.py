@@ -6,7 +6,7 @@ from src.database import (
     init_db, add_user, get_user_by_name, log_attendance,
     get_attendance_today, get_all_users, delete_user,
     authenticate_user, get_user_by_login_id, get_last_attendance,
-    get_setting, update_setting
+    get_setting, update_setting, get_student_attendance_history
 )
 
 TEST_DB_PATH = "data/test_attendance.db"
@@ -149,4 +149,23 @@ def test_settings_persistence():
 
     # Nonexistent setting returns default
     assert get_setting("nonexistent_key", "default_val", TEST_DB_PATH) == "default_val"
+
+def test_get_student_attendance_history():
+    """Tests retrieving attendance history for a specific student."""
+    user_id = add_user("Ethan Hunt", "ethan", "imf123", "student", TEST_DB_PATH)
+    
+    # Initially history is empty
+    history = get_student_attendance_history(user_id, TEST_DB_PATH)
+    assert len(history) == 0
+    
+    # Log two entries
+    log_attendance(user_id, "Blink Only", TEST_DB_PATH)
+    log_attendance(user_id, "Blink & Head Turn", TEST_DB_PATH)
+    
+    # Fetch history and verify entries
+    history = get_student_attendance_history(user_id, TEST_DB_PATH)
+    assert len(history) == 2
+    assert history[0]["liveness_method"] == "Blink & Head Turn" # Latest first
+    assert history[1]["liveness_method"] == "Blink Only"
+
 

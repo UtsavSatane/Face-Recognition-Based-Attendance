@@ -9,7 +9,7 @@ from database import (
     init_db, add_user, get_user_by_name, log_attendance, 
     get_attendance_today, get_all_users, delete_user, get_ist_now,
     authenticate_user, get_user_by_login_id, get_last_attendance,
-    get_setting, update_setting
+    get_setting, update_setting, get_student_attendance_history
 )
 from detector import FaceDetector
 from encoder import FaceEncoder
@@ -176,6 +176,10 @@ if 'user' not in st.session_state:
     st.session_state.user = None
 if 'attendance_success' not in st.session_state:
     st.session_state.attendance_success = False
+if 'portal' not in st.session_state:
+    st.session_state.portal = "Home"
+if 'kiosk_marked_name' not in st.session_state:
+    st.session_state.kiosk_marked_name = None
 
 # ----------------- HELPER FUNCTIONS -----------------
 def reset_liveness_states():
@@ -224,7 +228,8 @@ def check_liveness_conditions(ear: float, yaw_ratio: float, mode: str):
 
 # ----------------- SUCCESS POPUP OVERLAY -----------------
 if st.session_state.attendance_success:
-    st.markdown("""
+    marked_name = st.session_state.kiosk_marked_name if st.session_state.kiosk_marked_name else "Attendance"
+    st.markdown(f"""
     <div style="
         position: fixed;
         top: 50%;
@@ -241,101 +246,334 @@ if st.session_state.attendance_success:
         border: 2px solid rgba(255, 255, 255, 0.2);
         animation: fadeIn 0.4s ease;
     ">
-        <h2 style="color: white; margin-top: 0;">🎉 Checked In!</h2>
-        <p style="font-size: 1.25rem; font-weight: 500; margin-bottom: 0;">Attendance Marked Successfully!</p>
+        <h2 style="color: white; margin-top: 0;">🎉 Success!</h2>
+        <p style="font-size: 1.25rem; font-weight: 500; margin-bottom: 0;">Checked In: <b>{marked_name}</b></p>
     </div>
     <style>
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translate(-50%, -45%); }
-            to { opacity: 1; transform: translate(-50%, -50%); }
-        }
+        @keyframes fadeIn {{
+            from {{ opacity: 0; transform: translate(-50%, -45%); }}
+            to {{ opacity: 1; transform: translate(-50%, -50%); }}
+        }}
     </style>
     """, unsafe_allow_html=True)
     time.sleep(3.0)
     st.session_state.attendance_success = False
+    st.session_state.kiosk_marked_name = None
     st.rerun()
 
 # ----------------- LOGIN / SECURITY ROUTING -----------------
-if st.session_state.user is None:
-    st.markdown("<div style='text-align: center; margin-top: 3rem;'>", unsafe_allow_html=True)
-    st.markdown("<h1 class='main-title' style='text-align: center;'>🔑 BioAccess Portal Login</h1>", unsafe_allow_html=True)
-    st.markdown("<div class='subtitle' style='text-align: center;'>Select your portal and enter your credentials</div>", unsafe_allow_html=True)
-    st.markdown("</div>", unsafe_allow_html=True)
-    
-    col_l, col1, col2, col_r = st.columns([1, 4, 4, 1])
-    
-    with col1:
-        with st.form("student_login_form"):
-            st.markdown("<div class='portal-header'>🎓 Student Portal</div>", unsafe_allow_html=True)
-            st.markdown("<div class='portal-desc'>Access your student dashboard and log attendance</div>", unsafe_allow_html=True)
-            student_id = st.text_input("Student Login ID", placeholder="e.g. roll_number").strip()
-            student_pwd = st.text_input("Student Password", type="password", placeholder="Password").strip()
-            student_btn = st.form_submit_button("Log In to Student Portal", use_container_width=True)
-            
-            if student_btn:
-                if not student_id or not student_pwd:
-                    st.error("Please fill in both Student Login ID and Password.")
-                else:
-                    user = authenticate_user(student_id, student_pwd)
-                    if user and user['role'] == 'student':
-                        st.session_state.user = user
-                        st.success(f"Welcome back, {user['name']}!")
-                        time.sleep(1.0)
-                        st.rerun()
-                    elif user and user['role'] != 'student':
-                        st.error("Access Denied: This account is not a student account.")
-                    else:
-                        st.error("Invalid Login ID or Password.")
-                        
-    with col2:
-        with st.form("admin_login_form"):
-            st.markdown("<div class='portal-header'>🏢 Admin Portal</div>", unsafe_allow_html=True)
-            st.markdown("<div class='portal-desc'>Configure settings, register students, and view logs</div>", unsafe_allow_html=True)
-            admin_id = st.text_input("Admin Login ID", placeholder="Admin ID").strip()
-            admin_pwd = st.text_input("Admin Password", type="password", placeholder="Password").strip()
-            admin_btn = st.form_submit_button("Log In to Admin Portal", use_container_width=True)
-            
-            if admin_btn:
-                if not admin_id or not admin_pwd:
-                    st.error("Please fill in both Admin Login ID and Password.")
-                else:
-                    user = authenticate_user(admin_id, admin_pwd)
-                    if user and user['role'] == 'admin':
-                        st.session_state.user = user
-                        st.success("Admin authenticated successfully!")
-                        time.sleep(1.0)
-                        st.rerun()
-                    elif user and user['role'] != 'admin':
-                        st.error("Access Denied: This account is not an admin account.")
-                    else:
-                        st.error("Invalid Login ID or Password.")
-    st.stop()
-
-# Load Global Settings from database
 similarity_threshold = float(get_setting("similarity_threshold", "0.5"))
 liveness_mode = get_setting("liveness_mode", "Blink & Head Turn")
 
-# Sidebar profile and Logout
-st.sidebar.markdown("<h2 style='color:#818cf8;'>👤 Profile Details</h2>", unsafe_allow_html=True)
-st.sidebar.write(f"**Name:** {st.session_state.user['name']}")
-st.sidebar.write(f"**Login ID:** {st.session_state.user['login_id']}")
+# Side Navigation Header
+if st.session_state.portal != "Home":
+    st.sidebar.markdown("<h2 style='color:#818cf8; text-align: center;'>🌐 Navigation</h2>", unsafe_allow_html=True)
+    if st.sidebar.button("🏠 Switch Portal", use_container_width=True):
+        st.session_state.portal = "Home"
+        st.session_state.camera_running = False
+        st.session_state.user = None
+        reset_liveness_states()
+        st.rerun()
 
-role_label = st.session_state.user['role'].upper()
-role_color = "#38bdf8" if st.session_state.user['role'] == "admin" else "#818cf8"
-st.sidebar.markdown(
-    f"<span style='background-color:{role_color}22; color:{role_color}; padding:0.25rem 0.6rem; border-radius:4px; font-weight:bold; font-size:0.85rem;'>{role_label} PORTAL</span>",
-    unsafe_allow_html=True
-)
+# 1. HOME PORTAL SELECTOR
+if st.session_state.portal == "Home":
+    st.markdown("<div style='text-align: center; margin-top: 2rem;'>", unsafe_allow_html=True)
+    st.markdown("<h1 class='main-title' style='text-align: center;'>🔑 BioAccess Portal</h1>", unsafe_allow_html=True)
+    st.markdown("<div class='subtitle' style='text-align: center;'>Select a portal to access the system</div>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        with st.form("home_kiosk_card"):
+            st.markdown("<div class='portal-header'>📸 Mark Attendance</div>", unsafe_allow_html=True)
+            st.markdown("<div class='portal-desc'>Kiosk-style interface. Real-time facial scan for students. No login required.</div>", unsafe_allow_html=True)
+            kiosk_btn = st.form_submit_button("Launch Kiosk Mode", use_container_width=True)
+            if kiosk_btn:
+                st.session_state.portal = "Kiosk"
+                st.session_state.camera_running = False
+                st.session_state.user = None
+                reset_liveness_states()
+                st.rerun()
+                
+    with col2:
+        with st.form("home_student_card"):
+            st.markdown("<div class='portal-header'>🎓 Student Portal</div>", unsafe_allow_html=True)
+            st.markdown("<div class='portal-desc'>Dashboard to view your attendance history and check-in verification status. Login required.</div>", unsafe_allow_html=True)
+            student_btn = st.form_submit_button("Enter Student Portal", use_container_width=True)
+            if student_btn:
+                st.session_state.portal = "Student"
+                st.session_state.user = None
+                st.rerun()
+                
+    with col3:
+        with st.form("home_admin_card"):
+            st.markdown("<div class='portal-header'>🏢 Admin Portal</div>", unsafe_allow_html=True)
+            st.markdown("<div class='portal-desc'>Register students, configure matching thresholds, and export logs. Login required.</div>", unsafe_allow_html=True)
+            admin_btn = st.form_submit_button("Enter Admin Portal", use_container_width=True)
+            if admin_btn:
+                st.session_state.portal = "Admin"
+                st.session_state.user = None
+                st.rerun()
+    st.stop()
 
-st.sidebar.markdown("---")
-if st.sidebar.button("🔓 Logout", use_container_width=True):
-    st.session_state.user = None
-    st.session_state.camera_running = False
-    reset_liveness_states()
-    st.rerun()
+# 2. KIOSK PORTAL
+elif st.session_state.portal == "Kiosk":
+    st.markdown("<h1 class='main-title'>📸 Attendance Kiosk</h1>", unsafe_allow_html=True)
+    st.markdown("<div class='subtitle'>Place your face in the camera view to check in automatically.</div>", unsafe_allow_html=True)
+    
+    col_left, col_right = st.columns([2, 1])
+    
+    with col_right:
+        st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
+        st.markdown("<div class='metric-title'>System Status</div>", unsafe_allow_html=True)
+        if st.session_state.camera_running:
+            st.markdown("<div class='metric-value' style='color:#10b981;'>● Active Scan</div>", unsafe_allow_html=True)
+        else:
+            st.markdown("<div class='metric-value' style='color:#38bdf8;'>○ Ready</div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+        
+        st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
+        st.markdown("<div class='metric-title'>Anti-Spoofing Checklist</div>", unsafe_allow_html=True)
+        
+        b_chk = "✅ Blink Detected" if st.session_state.liveness_blink else "❌ Blink Required"
+        h_chk = f"✅ Head Turned ({st.session_state.head_turn_state})" if st.session_state.liveness_head else "❌ Head Turn Required"
+        
+        if liveness_mode in ["Blink Only", "Blink & Head Turn"]:
+            st.write(b_chk)
+        if liveness_mode in ["Head Turn Only", "Blink & Head Turn"]:
+            st.write(h_chk)
+        if liveness_mode == "None":
+            st.write("🟢 Anti-spoofing disabled")
+            
+        if st.session_state.liveness_verified:
+            st.success("🟢 Liveness verified!")
+        st.markdown("</div>", unsafe_allow_html=True)
+        
+    with col_left:
+        btn_col1, btn_col2 = st.columns(2)
+        with btn_col1:
+            if not st.session_state.camera_running:
+                if st.button("▶️ Start Kiosk Camera", use_container_width=True):
+                    st.session_state.camera_running = True
+                    reset_liveness_states()
+                    st.rerun()
+            else:
+                if st.button("⏹️ Stop Kiosk Camera", use_container_width=True):
+                    st.session_state.camera_running = False
+                    st.rerun()
+        with btn_col2:
+            if st.button("🔄 Reset Liveness", use_container_width=True):
+                reset_liveness_states()
+                st.rerun()
+                
+        frame_placeholder = st.empty()
+        
+        if st.session_state.camera_running:
+            cap = cv2.VideoCapture(0)
+            if not cap.isOpened():
+                st.session_state.camera_running = False
+                frame_placeholder.error("⚠️ Webcam unavailable. Verify your camera settings.")
+            else:
+                frame_count = 0
+                while st.session_state.camera_running:
+                    ret, frame = cap.read()
+                    if not ret:
+                        st.error("Lost webcam stream feed.")
+                        break
+                        
+                    frame_count += 1
+                    face_meta = detector.process_frame(frame, frame_count)
+                    
+                    if face_meta:
+                        x, y, w, h = face_meta['bbox']
+                        ear = face_meta['ear']
+                        yaw_ratio = face_meta['yaw_ratio']
+                        
+                        if not st.session_state.liveness_verified:
+                            check_liveness_conditions(ear, yaw_ratio, liveness_mode)
+                            
+                        if not st.session_state.liveness_verified:
+                            box_color = (0, 165, 255)
+                            label = f"Verifying Liveness | EAR: {ear:.2f} | Yaw: {yaw_ratio:.2f}"
+                        else:
+                            box_color = (255, 0, 0)
+                            label = "Liveness OK | Identifying Face..."
+                            
+                            emb = encoder.generate_embedding(frame)
+                            if emb is not None:
+                                match_id, sim = encoder.find_match(emb, similarity_threshold)
+                                if match_id is not None:
+                                    student = get_user_by_login_id(match_id)
+                                    if student:
+                                        last_log = get_last_attendance(student['id'])
+                                        now = get_ist_now()
+                                        can_mark = True
+                                        if last_log is not None and (now - last_log) < timedelta(hours=6):
+                                            can_mark = False
+                                            
+                                        if not can_mark:
+                                            box_color = (0, 165, 255)
+                                            label = f"Already Checked In: {student['name']}"
+                                        else:
+                                            log_attendance(student['id'], liveness_method=liveness_mode)
+                                            st.session_state.attendance_success = True
+                                            st.session_state.kiosk_marked_name = student['name']
+                                            st.session_state.camera_running = False
+                                            cap.release()
+                                            reset_liveness_states()
+                                            st.rerun()
+                                else:
+                                    box_color = (0, 0, 255)
+                                    label = f"Scanning... (Best Sim: {sim:.2f})"
+                            else:
+                                box_color = (0, 0, 255)
+                                label = "Failed to extract face features."
+                                
+                        cv2.rectangle(frame, (x, y), (x + w, y + h), box_color, 2)
+                        cv2.putText(frame, label, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, box_color, 2)
+                    else:
+                        if not st.session_state.liveness_verified:
+                            st.session_state.eye_closed_streak = 0
+                            
+                    frame_placeholder.image(frame, channels="BGR", use_container_width=True)
+                    time.sleep(0.01)
+                    
+                cap.release()
+                reset_liveness_states()
+    st.stop()
 
-# ----------------- ADMIN PORTAL -----------------
-if st.session_state.user['role'] == "admin":
+# 3. STUDENT PORTAL
+elif st.session_state.portal == "Student":
+    if st.session_state.user is None or st.session_state.user['role'] != 'student':
+        st.markdown("<div style='text-align: center; margin-top: 3rem;'>", unsafe_allow_html=True)
+        st.markdown("<h1 class='main-title' style='text-align: center;'>🔑 Student Portal Login</h1>", unsafe_allow_html=True)
+        st.markdown("<div class='subtitle' style='text-align: center;'>Please authenticate to view your dashboard</div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+        
+        col_l, col_mid, col_r = st.columns([1, 2, 1])
+        with col_mid:
+            with st.form("student_login_form"):
+                st.markdown("<div class='portal-header'>🎓 Student Login</div>", unsafe_allow_html=True)
+                student_id = st.text_input("Student Login ID", placeholder="e.g. roll_number").strip()
+                student_pwd = st.text_input("Student Password", type="password", placeholder="Password").strip()
+                student_btn = st.form_submit_button("Log In to Student Portal", use_container_width=True)
+                
+                if student_btn:
+                    if not student_id or not student_pwd:
+                        st.error("Please fill in both Student Login ID and Password.")
+                    else:
+                        user = authenticate_user(student_id, student_pwd)
+                        if user and user['role'] == 'student':
+                            st.session_state.user = user
+                            st.success(f"Welcome back, {user['name']}!")
+                            time.sleep(1.0)
+                            st.rerun()
+                        elif user and user['role'] != 'student':
+                            st.error("Access Denied: This account is not a student account.")
+                        else:
+                            st.error("Invalid Login ID or Password.")
+        st.stop()
+        
+    # Render Student Profile Details in Sidebar
+    st.sidebar.markdown("<h2 style='color:#818cf8;'>👤 Profile Details</h2>", unsafe_allow_html=True)
+    st.sidebar.write(f"**Name:** {st.session_state.user['name']}")
+    st.sidebar.write(f"**Login ID:** {st.session_state.user['login_id']}")
+    st.sidebar.markdown(
+        f"<span style='background-color:#818cf822; color:#818cf8; padding:0.25rem 0.6rem; border-radius:4px; font-weight:bold; font-size:0.85rem;'>STUDENT PORTAL</span>",
+        unsafe_allow_html=True
+    )
+    st.sidebar.markdown("---")
+    if st.sidebar.button("🔓 Logout", use_container_width=True):
+        st.session_state.user = None
+        st.session_state.camera_running = False
+        reset_liveness_states()
+        st.rerun()
+
+    # Dashboard contents
+    st.markdown(f"<h1 class='main-title'>🎓 Student Dashboard</h1>", unsafe_allow_html=True)
+    st.markdown(f"<div class='subtitle'>Hello, {st.session_state.user['name']}! Review your attendance history and verification status.</div>", unsafe_allow_html=True)
+    
+    col_status, col_history = st.columns([1, 2])
+    
+    with col_status:
+        st.markdown("### Today's Status")
+        last_log = get_last_attendance(st.session_state.user['id'])
+        now = get_ist_now()
+        marked_today = False
+        if last_log is not None and last_log.date() == now.date():
+            marked_today = True
+            
+        st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
+        st.markdown("<div class='metric-title'>Verification Status</div>", unsafe_allow_html=True)
+        if marked_today:
+            st.markdown("<div class='metric-value' style='color:#10b981;'>● Checked In</div>", unsafe_allow_html=True)
+            st.write(f"Logged today at: **{last_log.strftime('%I:%M %p')}**")
+        else:
+            st.markdown("<div class='metric-value' style='color:#ef4444;'>○ Absent / Pending</div>", unsafe_allow_html=True)
+            st.write("Your attendance for today has not been marked yet.")
+        st.markdown("</div>", unsafe_allow_html=True)
+        
+    with col_history:
+        st.markdown("### Personal Attendance History")
+        history = get_student_attendance_history(st.session_state.user['id'])
+        if not history:
+            st.info("No attendance records found.")
+        else:
+            import pandas as pd
+            df = pd.DataFrame(history)
+            df.columns = ["Record ID", "Date & Time", "Verification Method"]
+            df["Date & Time"] = pd.to_datetime(df["Date & Time"]).dt.strftime("%Y-%m-%d %I:%M %p")
+            st.dataframe(df, use_container_width=True)
+    st.stop()
+
+# 4. ADMIN PORTAL
+elif st.session_state.portal == "Admin":
+    if st.session_state.user is None or st.session_state.user['role'] != 'admin':
+        st.markdown("<div style='text-align: center; margin-top: 3rem;'>", unsafe_allow_html=True)
+        st.markdown("<h1 class='main-title' style='text-align: center;'>🔑 Admin Portal Login</h1>", unsafe_allow_html=True)
+        st.markdown("<div class='subtitle' style='text-align: center;'>Please authenticate to view the administrative panel</div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+        
+        col_l, col_mid, col_r = st.columns([1, 2, 1])
+        with col_mid:
+            with st.form("admin_login_form"):
+                st.markdown("<div class='portal-header'>🏢 Admin Login</div>", unsafe_allow_html=True)
+                admin_id = st.text_input("Admin Login ID", placeholder="Admin ID").strip()
+                admin_pwd = st.text_input("Admin Password", type="password", placeholder="Password").strip()
+                admin_btn = st.form_submit_button("Log In to Admin Portal", use_container_width=True)
+                
+                if admin_btn:
+                    if not admin_id or not admin_pwd:
+                        st.error("Please fill in both Admin Login ID and Password.")
+                    else:
+                        user = authenticate_user(admin_id, admin_pwd)
+                        if user and user['role'] == 'admin':
+                            st.session_state.user = user
+                            st.success("Admin authenticated successfully!")
+                            time.sleep(1.0)
+                            st.rerun()
+                        elif user and user['role'] != 'admin':
+                            st.error("Access Denied: This account is not an admin account.")
+                        else:
+                            st.error("Invalid Login ID or Password.")
+        st.stop()
+
+    # Render Profile Details in Sidebar
+    st.sidebar.markdown("<h2 style='color:#818cf8;'>👤 Profile Details</h2>", unsafe_allow_html=True)
+    st.sidebar.write(f"**Name:** {st.session_state.user['name']}")
+    st.sidebar.write(f"**Login ID:** {st.session_state.user['login_id']}")
+    st.sidebar.markdown(
+        f"<span style='background-color:#38bdf822; color:#38bdf8; padding:0.25rem 0.6rem; border-radius:4px; font-weight:bold; font-size:0.85rem;'>ADMIN PORTAL</span>",
+        unsafe_allow_html=True
+    )
+    st.sidebar.markdown("---")
+    if st.sidebar.button("🔓 Logout", use_container_width=True):
+        st.session_state.user = None
+        st.session_state.camera_running = False
+        reset_liveness_states()
+        st.rerun()
+
     st.markdown("<h1 class='main-title'>🏢 Admin Control Panel</h1>", unsafe_allow_html=True)
     st.markdown("<div class='subtitle'>Manage student directory, set face threshold criteria, and inspect reports</div>", unsafe_allow_html=True)
     
@@ -359,7 +597,6 @@ if st.session_state.user['role'] == "admin":
             enroll_btn = st.button("📸 Capture & Enrol Student Face", disabled=not (reg_name and reg_login and reg_password))
             
             if enroll_btn:
-                # Check login_id duplicate
                 if get_user_by_login_id(reg_login) is not None:
                     st.error(f"❌ Login ID '{reg_login}' is already registered in the system.")
                 else:
@@ -477,175 +714,3 @@ if st.session_state.user['role'] == "admin":
                 mime="text/csv",
                 use_container_width=True
             )
-
-# ----------------- STUDENT PORTAL -----------------
-else:
-    st.markdown("<h1 class='main-title'>🎓 Student Dashboard</h1>", unsafe_allow_html=True)
-    st.markdown(f"<div class='subtitle'>Hello, {st.session_state.user['name']}! Authenticate your attendance securely below.</div>", unsafe_allow_html=True)
-    
-    # 6-Hour Cooldown Verification
-    last_log = get_last_attendance(st.session_state.user['id'])
-    now = get_ist_now()
-    
-    can_mark = True
-    cooldown_rem = None
-    
-    if last_log is not None:
-        diff = now - last_log
-        if diff < timedelta(hours=6):
-            can_mark = False
-            cooldown_rem = timedelta(hours=6) - diff
-            
-    if not can_mark:
-        st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
-        st.markdown("<div class='metric-title' style='color:#ef4444;'>🚫 Cooldown Active</div>", unsafe_allow_html=True)
-        
-        tot_secs = int(cooldown_rem.total_seconds())
-        h, rem = divmod(tot_secs, 3600)
-        m, s = divmod(rem, 60)
-        
-        st.markdown(f"<div class='metric-value'>{h:02d}h {m:02d}m {s:02d}s</div>", unsafe_allow_html=True)
-        st.write("You have already logged your attendance. Repeated attendance is disabled for 6 hours.")
-        st.markdown("</div>", unsafe_allow_html=True)
-        
-        st.info(f"Last logged at: **{last_log.strftime('%Y-%m-%d %H:%M:%S')} (IST)**")
-        
-    else:
-        col_left, col_right = st.columns([2, 1])
-        
-        with col_right:
-            st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
-            st.markdown("<div class='metric-title'>System Status</div>", unsafe_allow_html=True)
-            if st.session_state.camera_running:
-                st.markdown("<div class='metric-value' style='color:#10b981;'>● Active Feed</div>", unsafe_allow_html=True)
-            else:
-                st.markdown("<div class='metric-value' style='color:#38bdf8;'>○ Eligible</div>", unsafe_allow_html=True)
-            st.markdown("</div>", unsafe_allow_html=True)
-            
-            st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
-            st.markdown("<div class='metric-title'>Anti-Spoofing Checklist</div>", unsafe_allow_html=True)
-            
-            b_chk = "✅ Blink Detected" if st.session_state.liveness_blink else "❌ Blink Required"
-            h_chk = f"✅ Head Turned ({st.session_state.head_turn_state})" if st.session_state.liveness_head else "❌ Head Turn Required"
-            
-            if liveness_mode in ["Blink Only", "Blink & Head Turn"]:
-                st.write(b_chk)
-            if liveness_mode in ["Head Turn Only", "Blink & Head Turn"]:
-                st.write(h_chk)
-            if liveness_mode == "None":
-                st.write("🟢 Anti-spoofing disabled")
-                
-            if st.session_state.liveness_verified:
-                st.success("🟢 Liveness verified!")
-            st.markdown("</div>", unsafe_allow_html=True)
-            
-        with col_left:
-            btn_col1, btn_col2 = st.columns(2)
-            with btn_col1:
-                if not st.session_state.camera_running:
-                    if st.button("▶️ Start Attendance Camera", use_container_width=True):
-                        st.session_state.camera_running = True
-                        reset_liveness_states()
-                        st.rerun()
-                else:
-                    if st.button("⏹️ Stop Camera", use_container_width=True):
-                        st.session_state.camera_running = False
-                        st.rerun()
-            with btn_col2:
-                if st.button("🔄 Reset Liveness Check", use_container_width=True):
-                    reset_liveness_states()
-                    
-            frame_placeholder = st.empty()
-            
-            if st.session_state.camera_running:
-                cap = cv2.VideoCapture(0)
-                student_emb_path = os.path.join("data/embeddings", f"{st.session_state.user['login_id']}.npy")
-                
-                if not os.path.exists(student_emb_path):
-                    st.session_state.camera_running = False
-                    frame_placeholder.error("⚠️ Face profile not registered. Please contact the administrator to enrol your face profile.")
-                elif not cap.isOpened():
-                    st.session_state.camera_running = False
-                    frame_placeholder.error("⚠️ Webcam unavailable. Verify your camera settings.")
-                    
-                    # Fallback
-                    st.info("💡 Fallback Mode: Upload your photo to verify.")
-                    uploaded_file = st.file_uploader("Upload Image Profile", type=["jpg", "jpeg", "png"])
-                    if uploaded_file is not None:
-                        file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
-                        image = cv2.imdecode(file_bytes, 1)
-                        face_meta = detector.process_frame(image, 0, force_process=True)
-                        if face_meta:
-                            emb = encoder.generate_embedding(image)
-                            if emb is not None:
-                                reg_emb = np.load(student_emb_path)
-                                sim = encoder.compare_embeddings(emb, reg_emb)
-                                if sim >= similarity_threshold:
-                                    log_attendance(st.session_state.user['id'], liveness_method="Fallback (Upload)")
-                                    st.session_state.attendance_success = True
-                                    st.session_state.camera_running = False
-                                    st.session_state.last_attendance_marked = (st.session_state.user['name'], get_ist_now())
-                                    st.rerun()
-                                else:
-                                    st.error("Face does not match your registered profile.")
-                            else:
-                                st.error("Failed to extract face features.")
-                        else:
-                            st.error("No face detected in upload.")
-                else:
-                    frame_count = 0
-                    reg_emb = np.load(student_emb_path)
-                    
-                    while st.session_state.camera_running:
-                        ret, frame = cap.read()
-                        if not ret:
-                            st.error("Lost webcam stream feed.")
-                            break
-                            
-                        frame_count += 1
-                        face_meta = detector.process_frame(frame, frame_count)
-                        
-                        if face_meta:
-                            x, y, w, h = face_meta['bbox']
-                            ear = face_meta['ear']
-                            yaw_ratio = face_meta['yaw_ratio']
-                            
-                            if not st.session_state.liveness_verified:
-                                check_liveness_conditions(ear, yaw_ratio, liveness_mode)
-                                
-                            if not st.session_state.liveness_verified:
-                                box_color = (0, 165, 255)
-                                label = f"Verifying Liveness | EAR: {ear:.2f} | Yaw: {yaw_ratio:.2f}"
-                            else:
-                                box_color = (255, 0, 0)
-                                label = "Liveness OK | Matching Face..."
-                                
-                                emb = encoder.generate_embedding(frame)
-                                if emb is not None:
-                                    sim = encoder.compare_embeddings(emb, reg_emb)
-                                    if sim >= similarity_threshold:
-                                        log_attendance(st.session_state.user['id'], liveness_method=liveness_mode)
-                                        st.session_state.attendance_success = True
-                                        st.session_state.camera_running = False
-                                        st.session_state.last_attendance_marked = (st.session_state.user['name'], get_ist_now())
-                                        cap.release()
-                                        reset_liveness_states()
-                                        st.rerun()
-                                    else:
-                                        box_color = (0, 0, 255)
-                                        label = f"Match Failed: Not {st.session_state.user['name']}"
-                                else:
-                                    box_color = (0, 0, 255)
-                                    label = "Failed to extract face features."
-                                    
-                            cv2.rectangle(frame, (x, y), (x + w, y + h), box_color, 2)
-                            cv2.putText(frame, label, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, box_color, 2)
-                        else:
-                            if not st.session_state.liveness_verified:
-                                st.session_state.eye_closed_streak = 0
-                                
-                        frame_placeholder.image(frame, channels="BGR", use_container_width=True)
-                        time.sleep(0.01)
-                        
-                    cap.release()
-                    reset_liveness_states()

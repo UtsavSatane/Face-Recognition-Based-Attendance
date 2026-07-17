@@ -256,3 +256,18 @@ def update_setting(key: str, value: str, db_path: str = "data/attendance.db") ->
     conn.commit()
     conn.close()
 
+def get_student_attendance_history(user_id: int, db_path: str = "data/attendance.db") -> list:
+    """Retrieves all attendance records for a specific student, sorted by latest first."""
+    conn = get_db_connection(db_path)
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id, timestamp, liveness_method
+        FROM attendance
+        WHERE user_id = ?
+        ORDER BY timestamp DESC, id DESC
+    """, (user_id,))
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+
