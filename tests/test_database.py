@@ -14,9 +14,16 @@ TEST_DB_PATH = "data/test_attendance.db"
 @pytest.fixture(autouse=True)
 def setup_and_teardown_db():
     """Sets up a clean test database before each test and tears it down afterwards."""
+    import shutil
     # Ensure any previous test database is removed
     if os.path.exists(TEST_DB_PATH):
         os.remove(TEST_DB_PATH)
+    # Ensure previous test classrooms are removed
+    if os.path.exists("data/test_classrooms"):
+        try:
+            shutil.rmtree("data/test_classrooms")
+        except Exception:
+            pass
         
     # Initialize the test schema
     init_db(TEST_DB_PATH)
@@ -29,6 +36,13 @@ def setup_and_teardown_db():
             os.remove(TEST_DB_PATH)
         except PermissionError:
             pass # Handle Windows file locking during teardown if necessary
+            
+    # Clean up test classrooms
+    if os.path.exists("data/test_classrooms"):
+        try:
+            shutil.rmtree("data/test_classrooms")
+        except Exception:
+            pass
 
 def test_database_initialization():
     """Verifies that the database files and tables are initialized correctly."""
@@ -167,5 +181,47 @@ def test_get_student_attendance_history():
     assert len(history) == 2
     assert history[0]["liveness_method"] == "Blink & Head Turn" # Latest first
     assert history[1]["liveness_method"] == "Blink Only"
+
+def test_classroom_attendance_logging():
+    """Tests that logging attendance for a student with department and section correctly creates classroom folders and CSV files."""
+    import shutil
+    import csv
+    
+    # Add student with department and section
+    user_id = add_user("Test Student", "teststudent", "pwd123", "student", TEST_DB_PATH, "Computer Science", "Section A")
+    
+    # Ensure folders do not exist yet
+    test_classrooms_dir = "data/test_classrooms"
+    if os.path.exists(test_classrooms_dir):
+        shutil.rmtree(test_classrooms_dir)
+        
+    # Log attendance
+    log_id = log_attendance(user_id, "Blink Only", TEST_DB_PATH)
+    assert log_id > 0
+    
+    # Check folder creation
+    expected_folder = os.path.join(test_classrooms_dir, "Computer Science_Section A")
+    assert os.path.exists(expected_folder)
+    
+    # Check cumulative CSV
+    cum_csv_path = os.path.join(expected_folder, "attendance.csv")
+    assert os.path.exists(cum_csv_path)
+    
+    # Verify content of cumulative CSV
+    with open(cum_csv_path, mode="r", newline="", encoding="utf-8") as f:
+        reader = list(csv.reader(f))
+        assert len(reader) == 2 # Header + 1 row
+        assert reader[0] == ["Timestamp", "Student ID", "Name", "Department", "Section", "Liveness Method"]
+        assert reader[1][1] == "teststudent"
+        assert reader[1][2] == "Test Student"
+        assert reader[1][3] == "Computer Science"
+        assert reader[1][4] == "Section A"
+        assert reader[1][5] == "Blink Only"
+        
+    # Check daily CSV
+    from datetime import datetime
+    date_str = datetime.now().strftime("%Y-%m-%d")
+    daily_csv_path = os.path.join(expected_folder, f"attendance_{date_str}.csv")
+    assert os.path.exists(daily_csv_path)
 
 

@@ -479,6 +479,8 @@ elif st.session_state.portal == "Student":
     st.sidebar.markdown("<h2 style='color:#818cf8;'>👤 Profile Details</h2>", unsafe_allow_html=True)
     st.sidebar.write(f"**Name:** {st.session_state.user['name']}")
     st.sidebar.write(f"**Login ID:** {st.session_state.user['login_id']}")
+    st.sidebar.write(f"**Department:** {st.session_state.user.get('department') or 'N/A'}")
+    st.sidebar.write(f"**Section:** {st.session_state.user.get('section') or 'N/A'}")
     st.sidebar.markdown(
         f"<span style='background-color:#818cf822; color:#818cf8; padding:0.25rem 0.6rem; border-radius:4px; font-weight:bold; font-size:0.85rem;'>STUDENT PORTAL</span>",
         unsafe_allow_html=True
@@ -577,10 +579,11 @@ elif st.session_state.portal == "Admin":
     st.markdown("<h1 class='main-title'>🏢 Admin Control Panel</h1>", unsafe_allow_html=True)
     st.markdown("<div class='subtitle'>Manage student directory, set face threshold criteria, and inspect reports</div>", unsafe_allow_html=True)
     
-    tab_enroll, tab_settings, tab_students, tab_logs = st.tabs([
+    tab_enroll, tab_settings, tab_students, tab_classrooms, tab_logs = st.tabs([
         "👤 Register Student",
         "⚙️ Threshold Settings",
         "📋 Student Directory",
+        "🏫 Classroom Files",
         "📊 Attendance Reports"
     ])
     
@@ -593,8 +596,10 @@ elif st.session_state.portal == "Admin":
             reg_name = st.text_input("Full Name", placeholder="e.g. Utsav Kumar").strip()
             reg_login = st.text_input("Login ID / Roll Number", placeholder="e.g. utsav2026").strip()
             reg_password = st.text_input("Password", type="password", placeholder="e.g. studpwd123").strip()
+            reg_department = st.text_input("Department", placeholder="e.g. Computer Science").strip()
+            reg_section = st.text_input("Section", placeholder="e.g. A").strip()
             
-            enroll_btn = st.button("📸 Capture & Enrol Student Face", disabled=not (reg_name and reg_login and reg_password))
+            enroll_btn = st.button("📸 Capture & Enrol Student Face", disabled=not (reg_name and reg_login and reg_password and reg_department and reg_section))
             
             if enroll_btn:
                 if get_user_by_login_id(reg_login) is not None:
@@ -618,7 +623,7 @@ elif st.session_state.portal == "Admin":
                                 if emb is not None:
                                     try:
                                         encoder.save_embedding(reg_login, emb)
-                                        add_user(reg_name, reg_login, reg_password, role='student')
+                                        add_user(reg_name, reg_login, reg_password, role='student', department=reg_department, section=reg_section)
                                         st.success(f"🎉 Success! Student '{reg_name}' enrolled successfully.")
                                         time.sleep(1.5)
                                         st.rerun()
@@ -665,8 +670,9 @@ elif st.session_state.portal == "Admin":
         else:
             for s in students:
                 c1, c2, c3 = st.columns([3, 2, 1])
+                dept_sec = f" | Dept: **{s.get('department') or 'N/A'}** | Sec: **{s.get('section') or 'N/A'}**"
                 with c1:
-                    st.write(f"👤 **{s['name']}** (Login ID: `{s['login_id']}`)")
+                    st.write(f"👤 **{s['name']}** (Login ID: `{s['login_id']}`){dept_sec}")
                 with c2:
                     st.write(f"📅 Enrolled: {s['created_at'][:16]}")
                 with c3:
@@ -676,6 +682,50 @@ elif st.session_state.portal == "Admin":
                         st.success(f"Removed {s['name']}.")
                         time.sleep(0.5)
                         st.rerun()
+
+    # 3.5. CLASSROOM FILES
+    with tab_classrooms:
+        st.markdown("### 🏫 Classroom Attendance Folders")
+        
+        classrooms_dir = "classrooms"
+        if not os.path.exists(classrooms_dir) or not os.listdir(classrooms_dir):
+            st.info("No classroom folders have been created yet. Classroom folders are automatically created when attendance is successfully logged for a student with an assigned department and section.")
+        else:
+            # List all classroom directories
+            dirs = [d for d in os.listdir(classrooms_dir) if os.path.isdir(os.path.join(classrooms_dir, d))]
+            if not dirs:
+                st.info("No classroom folders have been created yet.")
+            else:
+                selected_classroom = st.selectbox("Select Classroom Folder to Inspect", sorted(dirs))
+                
+                if selected_classroom:
+                    classroom_path = os.path.join(classrooms_dir, selected_classroom)
+                    files = [f for f in os.listdir(classroom_path) if f.endswith(".csv")]
+                    
+                    if not files:
+                        st.warning("No attendance files found in this classroom folder.")
+                    else:
+                        selected_file = st.selectbox("Select Attendance File", sorted(files))
+                        
+                        if selected_file:
+                            file_path = os.path.join(classroom_path, selected_file)
+                            import pandas as pd
+                            try:
+                                df_class = pd.read_csv(file_path)
+                                st.markdown(f"#### Preview: `{selected_file}`")
+                                st.dataframe(df_class, use_container_width=True)
+                                
+                                # Download button
+                                with open(file_path, "rb") as f:
+                                    st.download_button(
+                                        label="📥 Download CSV File",
+                                        data=f,
+                                        file_name=selected_file,
+                                        mime="text/csv",
+                                        use_container_width=True
+                                    )
+                            except Exception as e:
+                                st.error(f"Error reading file: {e}")
 
     # 4. ATTENDANCE REPORTS
     with tab_logs:

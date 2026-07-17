@@ -55,6 +55,8 @@ def init_db(db_path: str = "data/attendance.db") -> None:
             login_id TEXT UNIQUE NOT NULL,
             password TEXT NOT NULL,
             role TEXT NOT NULL DEFAULT 'student',
+            department TEXT,
+            section TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
@@ -78,6 +80,14 @@ def init_db(db_path: str = "data/attendance.db") -> None:
         )
     """)
     
+    # Ensure department and section columns exist in users table
+    cursor.execute("PRAGMA table_info(users)")
+    columns = [row['name'] for row in cursor.fetchall()]
+    if 'department' not in columns:
+        cursor.execute("ALTER TABLE users ADD COLUMN department TEXT")
+    if 'section' not in columns:
+        cursor.execute("ALTER TABLE users ADD COLUMN section TEXT")
+        
     conn.commit()
     
     # If migration is needed, insert migrated users
@@ -116,7 +126,7 @@ def init_db(db_path: str = "data/attendance.db") -> None:
     conn.commit()
     conn.close()
 
-def add_user(name: str, login_id: str, password: str, role: str = 'student', db_path: str = "data/attendance.db") -> int:
+def add_user(name: str, login_id: str, password: str, role: str = 'student', db_path: str = "data/attendance.db", department: str = None, section: str = None) -> int:
     """Registers a new user (student/admin) in the database. Returns the new user's ID."""
     conn = get_db_connection(db_path)
     cursor = conn.cursor()
@@ -124,8 +134,10 @@ def add_user(name: str, login_id: str, password: str, role: str = 'student', db_
         created_at = get_ist_now().strftime("%Y-%m-%d %H:%M:%S")
         hashed_password = hash_password(password)
         cursor.execute(
-            "INSERT INTO users (name, login_id, password, role, created_at) VALUES (?, ?, ?, ?, ?)",
-            (name.strip(), login_id.strip().lower(), hashed_password, role, created_at)
+            "INSERT INTO users (name, login_id, password, role, department, section, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (name.strip(), login_id.strip().lower(), hashed_password, role,
+             department.strip() if department else None,
+             section.strip() if section else None, created_at)
         )
         conn.commit()
         user_id = cursor.lastrowid
@@ -141,7 +153,7 @@ def authenticate_user(login_id: str, password: str, db_path: str = "data/attenda
     cursor = conn.cursor()
     hashed_pwd = hash_password(password)
     cursor.execute(
-        "SELECT id, name, login_id, role, created_at FROM users WHERE login_id = ? AND password = ?",
+        "SELECT id, name, login_id, role, department, section, created_at FROM users WHERE login_id = ? AND password = ?",
         (login_id.strip().lower(), hashed_pwd)
     )
     row = cursor.fetchone()
@@ -154,7 +166,7 @@ def get_user_by_name(name: str, db_path: str = "data/attendance.db") -> dict | N
     """Retrieves a user by their name."""
     conn = get_db_connection(db_path)
     cursor = conn.cursor()
-    cursor.execute("SELECT id, name, login_id, role, created_at FROM users WHERE name = ?", (name.strip(),))
+    cursor.execute("SELECT id, name, login_id, role, department, section, created_at FROM users WHERE name = ?", (name.strip(),))
     row = cursor.fetchone()
     conn.close()
     if row:
@@ -165,25 +177,74 @@ def get_user_by_login_id(login_id: str, db_path: str = "data/attendance.db") -> 
     """Retrieves a user by their login ID."""
     conn = get_db_connection(db_path)
     cursor = conn.cursor()
-    cursor.execute("SELECT id, name, login_id, role, created_at FROM users WHERE login_id = ?", (login_id.strip().lower(),))
+    cursor.execute("SELECT id, name, login_id, role, department, section, created_at FROM users WHERE login_id = ?", (login_id.strip().lower(),))
     row = cursor.fetchone()
     conn.close()
     if row:
         return dict(row)
     return None
 
+
 def log_attendance(user_id: int, liveness_method: str, db_path: str = "data/attendance.db") -> int:
     """Logs a successful attendance entry for a user."""
     conn = get_db_connection(db_path)
     cursor = conn.cursor()
-    timestamp = get_ist_now().strftime("%Y-%m-%d %H:%M:%S")
+    timestamp_dt = get_ist_now()
+    timestamp = timestamp_dt.strftime("%Y-%m-%d %H:%M:%S")
     cursor.execute(
         "INSERT INTO attendance (user_id, liveness_method, timestamp) VALUES (?, ?, ?)",
         (user_id, liveness_method, timestamp)
     )
     conn.commit()
     log_id = cursor.lastrowid
+    
+    # Get user details for classroom folder logging
+    cursor.execute("SELECT name, login_id, role, department, section FROM users WHERE id = ?", (user_id,))
+    user_row = cursor.fetchone()
     conn.close()
+    
+    if user_row:
+        user = dict(user_row)
+        # Check if the user is a student and has department & section set
+        if user['role'] == 'student' and user.get('department') and user.get('section'):
+            import csv
+            # Sanitize names for folder paths
+            dept_sanitized = "".join(c for c in user['department'] if c.isalnum() or c in (' ', '_', '-')).strip()
+            sec_sanitized = "".join(c for c in user['section'] if c.isalnum() or c in (' ', '_', '-')).strip()
+            if dept_sanitized and sec_sanitized:
+                # Use a different folder for tests to keep test output isolated
+                if "test_" in os.path.basename(db_path):
+                    classrooms_base = "data/test_classrooms"
+                else:
+                    classrooms_base = "classrooms"
+                classroom_folder = os.path.join(classrooms_base, f"{dept_sanitized}_{sec_sanitized}")
+                os.makedirs(classroom_folder, exist_ok=True)
+                
+                # Append to cumulative attendance file
+                cumulative_csv = os.path.join(classroom_folder, "attendance.csv")
+                file_exists = os.path.exists(cumulative_csv)
+                try:
+                    with open(cumulative_csv, mode="a", newline="", encoding="utf-8") as f:
+                        writer = csv.writer(f)
+                        if not file_exists:
+                            writer.writerow(["Timestamp", "Student ID", "Name", "Department", "Section", "Liveness Method"])
+                        writer.writerow([timestamp, user['login_id'], user['name'], user['department'], user['section'], liveness_method])
+                except Exception as e:
+                    print(f"Error logging classroom cumulative attendance: {e}")
+                
+                # Append to daily attendance file
+                date_str = timestamp_dt.strftime("%Y-%m-%d")
+                daily_csv = os.path.join(classroom_folder, f"attendance_{date_str}.csv")
+                daily_exists = os.path.exists(daily_csv)
+                try:
+                    with open(daily_csv, mode="a", newline="", encoding="utf-8") as f:
+                        writer = csv.writer(f)
+                        if not daily_exists:
+                            writer.writerow(["Timestamp", "Student ID", "Name", "Department", "Section", "Liveness Method"])
+                        writer.writerow([timestamp, user['login_id'], user['name'], user['department'], user['section'], liveness_method])
+                except Exception as e:
+                    print(f"Error logging classroom daily attendance: {e}")
+                    
     return log_id
 
 def get_last_attendance(user_id: int, db_path: str = "data/attendance.db") -> datetime | None:
@@ -221,7 +282,7 @@ def get_all_users(db_path: str = "data/attendance.db") -> list:
     """Retrieves all registered users (usually filters to role='student' or sorted name)."""
     conn = get_db_connection(db_path)
     cursor = conn.cursor()
-    cursor.execute("SELECT id, name, login_id, role, created_at FROM users WHERE role = 'student' ORDER BY name ASC")
+    cursor.execute("SELECT id, name, login_id, role, department, section, created_at FROM users WHERE role = 'student' ORDER BY name ASC")
     rows = cursor.fetchall()
     conn.close()
     return [dict(row) for row in rows]
