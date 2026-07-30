@@ -78,9 +78,9 @@ The application has been fully optimized to operate on **Indian Standard Time (I
 
 ## 🏁 How to Run
 
-### 1. Launch the Streamlit Dashboard
+### 1. Launch the Flask UI Dashboard
 ```bash
-streamlit run src/main.py
+.venv\Scripts\python src/main.py
 ```
 This opens the browser dashboard at `http://localhost:8501`.
 
