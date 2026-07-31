@@ -117,6 +117,7 @@ const captureCtx = captureCanvas.getContext('2d');
 
 // Initialize App
 document.addEventListener('DOMContentLoaded', () => {
+    setupThemeToggle();
     setupNavigation();
     setupKioskControls();
     setupStudentAuth();
@@ -195,6 +196,41 @@ function setupNavigation() {
     elements.cardKiosk.addEventListener('click', () => switchPortal('kiosk'));
     elements.cardStudent.addEventListener('click', () => switchPortal('student'));
     elements.cardAdmin.addEventListener('click', () => switchPortal('admin'));
+}
+
+// Theme Toggle handling
+function setupThemeToggle() {
+    const themeToggleBtn = document.getElementById('theme-toggle');
+    if (!themeToggleBtn) return;
+    
+    // Check saved theme or system preference
+    const savedTheme = localStorage.getItem('theme');
+    const systemPrefersLight = window.matchMedia('(prefers-color-scheme: light)').matches;
+    
+    const setLightMode = (isLight) => {
+        if (isLight) {
+            document.documentElement.classList.add('light-theme');
+            themeToggleBtn.innerHTML = '<i class="fas fa-moon"></i>';
+            localStorage.setItem('theme', 'light');
+        } else {
+            document.documentElement.classList.remove('light-theme');
+            themeToggleBtn.innerHTML = '<i class="fas fa-sun"></i>';
+            localStorage.setItem('theme', 'dark');
+        }
+    };
+    
+    // Initialize
+    if (savedTheme === 'light' || (!savedTheme && systemPrefersLight)) {
+        setLightMode(true);
+    } else {
+        setLightMode(false);
+    }
+    
+    // Toggle click handler
+    themeToggleBtn.addEventListener('click', () => {
+        const isCurrentLight = document.documentElement.classList.contains('light-theme');
+        setLightMode(!isCurrentLight);
+    });
 }
 
 // ----------------- KIOSK CONTROLS & CAMERA -----------------

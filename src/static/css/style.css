@@ -14,6 +14,26 @@
     --warning: #f59e0b;
     --danger: #ef4444;
     --card-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.3);
+    --input-bg: rgba(15, 23, 42, 0.6);
+    --overlay-bg: rgba(9, 13, 22, 0.85);
+}
+
+:root.light-theme {
+    --bg-primary: #f8fafc;
+    --bg-secondary: #ffffff;
+    --accent-primary: #4f46e5;
+    --accent-secondary: #7c3aed;
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --border-color: rgba(15, 23, 42, 0.08);
+    --glass-bg: rgba(255, 255, 255, 0.7);
+    --glass-glow: rgba(79, 70, 229, 0.1);
+    --success: #10b981;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    --card-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.06);
+    --input-bg: rgba(255, 255, 255, 0.8);
+    --overlay-bg: rgba(255, 255, 255, 0.85);
 }
 
 * {
@@ -89,7 +109,28 @@ header {
 
 .nav-btn:hover {
     color: var(--text-primary);
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--border-color);
+}
+
+.theme-toggle-btn {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    width: 38px;
+    height: 38px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    font-size: 1rem;
+}
+
+.theme-toggle-btn:hover {
+    color: var(--text-primary);
+    background: var(--border-color);
+    transform: scale(1.05);
 }
 
 .nav-btn.active {
@@ -241,7 +282,7 @@ header {
 
 .form-control {
     width: 100%;
-    background: rgba(15, 23, 42, 0.6);
+    background: var(--input-bg);
     border: 1px solid var(--border-color);
     border-radius: 10px;
     padding: 0.75rem 1rem;
@@ -279,7 +320,7 @@ header {
 }
 
 .btn-primary:disabled {
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--border-color);
     color: var(--text-secondary);
     cursor: not-allowed;
     box-shadow: none;
@@ -457,7 +498,7 @@ header {
 
 .tab-btn:hover {
     color: var(--text-primary);
-    background: rgba(255, 255, 255, 0.03);
+    background: var(--border-color);
 }
 
 .tab-btn.active {
@@ -494,7 +535,7 @@ table {
 }
 
 th {
-    background: rgba(255, 255, 255, 0.03);
+    background: var(--border-color);
     color: var(--text-secondary);
     font-weight: 600;
     padding: 1rem;
@@ -578,7 +619,7 @@ tr:hover td {
     left: 0;
     width: 100vw;
     height: 100vh;
-    background: rgba(9, 13, 22, 0.85);
+    background: var(--overlay-bg);
     backdrop-filter: blur(8px);
     z-index: 9999;
     display: flex;
@@ -595,7 +636,7 @@ tr:hover td {
 }
 
 .success-modal {
-    background: #121829;
+    background: var(--bg-secondary);
     border: 2px solid var(--success);
     border-radius: 24px;
     padding: 3rem;
@@ -633,7 +674,7 @@ tr:hover td {
 .success-modal h2 {
     font-size: 2rem;
     margin-bottom: 0.5rem;
-    color: white;
+    color: var(--text-primary);
 }
 
 .success-modal p {
@@ -683,7 +724,7 @@ tr:hover td {
     display: flex;
     justify-content: space-between;
     padding: 0.5rem 0;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    border-bottom: 1px solid var(--border-color);
 }
 
 .profile-detail:last-child {
@@ -729,7 +770,7 @@ input[type="range"] {
     -webkit-appearance: none;
     width: 100%;
     height: 6px;
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--border-color);
     border-radius: 5px;
     outline: none;
 }
@@ -747,4 +788,13 @@ input[type="range"]::-webkit-slider-thumb {
 
 input[type="range"]::-webkit-slider-thumb:hover {
     background: var(--accent-secondary);
+}
+
+/* Theme Toggle Icon Animation */
+.theme-toggle-btn i {
+    transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.theme-toggle-btn:hover i {
+    transform: rotate(45deg);
 }
