@@ -3,6 +3,8 @@ import base64
 import cv2
 import numpy as np
 from datetime import datetime, timedelta
+import webbrowser
+from threading import Timer
 from flask import Flask, render_template, request, jsonify, send_file
 
 from database import (
@@ -380,7 +382,13 @@ def admin_download_report():
     )
 
 # ----------------- MAIN SERVER RUN -----------------
+def open_browser():
+    webbrowser.open_new("http://localhost:6030/")
+
 if __name__ == '__main__':
-    # Streamlit runs on 8501, so we can run on 8501 as well for continuity!
+    # Prevent opening browser twice when Flask reloader is active
+    if not os.environ.get("WERKZEUG_RUN_MAIN"):
+        Timer(1.5, open_browser).start()
+
     # Running locally, binding to localhost
-    app.run(host='127.0.0.1', port=8501, debug=True)
+    app.run(host='127.0.0.1', port=6030, debug=True)

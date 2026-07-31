@@ -751,7 +751,11 @@ function checkEnrollSubmitStatus() {
 
 // Add event listeners for form validation
 ['enroll-name', 'enroll-login', 'enroll-password', 'enroll-dept', 'enroll-sec'].forEach(id => {
-    document.getElementById(id).addEventListener('input', checkEnrollSubmitStatus);
+    const el = document.getElementById(id);
+    if (el) {
+        el.addEventListener('input', checkEnrollSubmitStatus);
+        el.addEventListener('change', checkEnrollSubmitStatus);
+    }
 });
 
 async function handleEnrollment(e) {
