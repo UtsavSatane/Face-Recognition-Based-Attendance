@@ -798,3 +798,97 @@ input[type="range"]::-webkit-slider-thumb:hover {
 .theme-toggle-btn:hover i {
     transform: rotate(45deg);
 }
+
+/* Custom Alert Modal Styles */
+.custom-alert-modal {
+    background: var(--bg-secondary);
+    border: 2px solid var(--border-color);
+    border-radius: 24px;
+    padding: 2.5rem 2rem;
+    text-align: center;
+    box-shadow: var(--card-shadow);
+    transform: scale(0.9);
+    transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    max-width: 420px;
+    width: 90%;
+}
+
+.overlay.active .custom-alert-modal {
+    transform: scale(1);
+}
+
+/* Border dynamic changes based on alert type */
+.custom-alert-modal.success {
+    border-color: var(--success);
+    box-shadow: 0 20px 50px rgba(16, 185, 129, 0.15);
+}
+
+.custom-alert-modal.error {
+    border-color: var(--danger);
+    box-shadow: 0 20px 50px rgba(239, 68, 68, 0.15);
+}
+
+.custom-alert-modal.warning {
+    border-color: var(--warning);
+    box-shadow: 0 20px 50px rgba(245, 158, 11, 0.15);
+}
+
+.custom-alert-modal.info {
+    border-color: var(--accent-primary);
+    box-shadow: 0 20px 50px rgba(99, 102, 241, 0.15);
+}
+
+.custom-alert-icon {
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 1.25rem;
+    font-size: 2.2rem;
+    animation: scaleUp 0.5s ease forwards;
+}
+
+.custom-alert-icon.success {
+    color: var(--success);
+    background: rgba(16, 185, 129, 0.1);
+}
+
+.custom-alert-icon.error {
+    color: var(--danger);
+    background: rgba(239, 68, 68, 0.1);
+}
+
+.custom-alert-icon.warning {
+    color: var(--warning);
+    background: rgba(245, 158, 11, 0.1);
+}
+
+.custom-alert-icon.info {
+    color: var(--accent-primary);
+    background: rgba(99, 102, 241, 0.1);
+}
+
+.custom-alert-modal h2 {
+    font-size: 1.75rem;
+    margin-bottom: 0.75rem;
+    color: var(--text-primary);
+}
+
+.custom-alert-modal p {
+    color: var(--text-secondary);
+    font-size: 1rem;
+    line-height: 1.5;
+    margin-bottom: 1.5rem;
+    word-break: break-word;
+}
+
+.custom-alert-modal .btn-primary {
+    width: 100%;
+    padding: 0.8rem;
+    font-weight: 600;
+    border-radius: 12px;
+    cursor: pointer;
+}
+

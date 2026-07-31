@@ -79,7 +79,22 @@ def init_db(db_path: str = "data/attendance.db") -> None:
             value TEXT NOT NULL
         )
     """)
-    
+
+    # Create password_resets table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS password_resets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            status TEXT NOT NULL DEFAULT 'PENDING',
+            otp TEXT,
+            created_at TIMESTAMP,
+            approved_at TIMESTAMP,
+            admin_id INTEGER,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (admin_id) REFERENCES users(id) ON DELETE SET NULL
+        )
+    """)
+
     # Ensure department and section columns exist in users table
     cursor.execute("PRAGMA table_info(users)")
     columns = [row['name'] for row in cursor.fetchall()]
@@ -330,5 +345,114 @@ def get_student_attendance_history(user_id: int, db_path: str = "data/attendance
     rows = cursor.fetchall()
     conn.close()
     return [dict(row) for row in rows]
+
+def create_reset_request(login_id: str, db_path: str = "data/attendance.db") -> int:
+    """Creates a pending password reset request for the student. Enforces rate-limiting."""
+    conn = get_db_connection(db_path)
+    cursor = conn.cursor()
+    try:
+        # Find user
+        cursor.execute("SELECT id FROM users WHERE login_id = ? AND role = 'student'", (login_id.strip().lower(),))
+        user_row = cursor.fetchone()
+        if not user_row:
+            raise ValueError(f"Student ID '{login_id}' is not registered.")
+            
+        user_id = user_row['id']
+        now_str = get_ist_now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        # Check last reset request for rate limiting (15 minutes cooldown)
+        cursor.execute(
+            "SELECT created_at FROM password_resets WHERE user_id = ? ORDER BY created_at DESC LIMIT 1",
+            (user_id,)
+        )
+        last_req = cursor.fetchone()
+        if last_req:
+            last_time = datetime.strptime(last_req['created_at'], "%Y-%m-%d %H:%M:%S")
+            if get_ist_now() - last_time < timedelta(minutes=15):
+                # Calculate remaining cooldown time
+                remaining_sec = 15 * 60 - int((get_ist_now() - last_time).total_seconds())
+                remaining_min = int(remaining_sec / 60) + (1 if remaining_sec % 60 > 0 else 0)
+                raise ValueError(f"You can only request a password reset once every 15 minutes. Please try again in {remaining_min} minute(s).")
+                
+        # Insert request
+        cursor.execute(
+            "INSERT INTO password_resets (user_id, status, created_at) VALUES (?, 'PENDING', ?)",
+            (user_id, now_str)
+        )
+        conn.commit()
+        req_id = cursor.lastrowid
+        return req_id
+    finally:
+        conn.close()
+
+def get_reset_requests(db_path: str = "data/attendance.db") -> list:
+    """Retrieves all reset requests with student and auditing admin details."""
+    conn = get_db_connection(db_path)
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT pr.id, pr.status, pr.otp, pr.created_at, pr.approved_at,
+               u.name AS student_name, u.login_id AS student_login_id,
+               adm.name AS admin_name, adm.login_id AS admin_login_id
+        FROM password_resets pr
+        JOIN users u ON pr.user_id = u.id
+        LEFT JOIN users adm ON pr.admin_id = adm.id
+        ORDER BY pr.created_at DESC
+    """)
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+def update_reset_request_status(request_id: int, status: str, admin_id: int, otp: str = None, db_path: str = "data/attendance.db") -> None:
+    """Updates the status and logs the auditing admin for a password reset request."""
+    conn = get_db_connection(db_path)
+    cursor = conn.cursor()
+    try:
+        now_str = get_ist_now().strftime("%Y-%m-%d %H:%M:%S") if status == 'APPROVED' else None
+        cursor.execute("""
+            UPDATE password_resets
+            SET status = ?, admin_id = ?, otp = ?, approved_at = ?
+            WHERE id = ?
+        """, (status, admin_id, otp, now_str, request_id))
+        conn.commit()
+    finally:
+        conn.close()
+
+def verify_and_reset_password(login_id: str, otp: str, new_password: str, db_path: str = "data/attendance.db") -> tuple[bool, str]:
+    """Verifies the reset OTP and resets the student's password. Enforces expiration and single-use."""
+    conn = get_db_connection(db_path)
+    cursor = conn.cursor()
+    try:
+        # Find approved request with matching OTP for this student
+        cursor.execute("""
+            SELECT pr.id, pr.approved_at, pr.user_id
+            FROM password_resets pr
+            JOIN users u ON pr.user_id = u.id
+            WHERE u.login_id = ? AND pr.status = 'APPROVED' AND pr.otp = ?
+            ORDER BY pr.created_at DESC LIMIT 1
+        """, (login_id.strip().lower(), otp.strip()))
+        row = cursor.fetchone()
+        
+        if not row:
+            return False, "Invalid OTP or Student ID, or request is not approved yet."
+            
+        req_id = row['id']
+        user_id = row['user_id']
+        approved_time = datetime.strptime(row['approved_at'], "%Y-%m-%d %H:%M:%S")
+        
+        # Check for 15-minute token expiration
+        if get_ist_now() - approved_time > timedelta(minutes=15):
+            # Invalidate request as expired
+            cursor.execute("UPDATE password_resets SET status = 'EXPIRED', otp = NULL WHERE id = ?", (req_id,))
+            conn.commit()
+            return False, "The OTP has expired (15-minute validity). Please request a new password reset."
+            
+        # Valid request! Execute reset and set status to COMPLETED (clearing OTP to prevent reuse)
+        hashed_password = hash_password(new_password)
+        cursor.execute("UPDATE users SET password = ? WHERE id = ?", (hashed_password, user_id))
+        cursor.execute("UPDATE password_resets SET status = 'COMPLETED', otp = NULL WHERE id = ?", (req_id,))
+        conn.commit()
+        return True, "Password successfully reset! You can now log in."
+    finally:
+        conn.close()
 
 

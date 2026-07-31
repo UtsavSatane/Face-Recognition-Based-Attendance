@@ -11,7 +11,9 @@ from database import (
     init_db, add_user, get_user_by_name, log_attendance, 
     get_attendance_today, get_all_users, delete_user, get_ist_now,
     authenticate_user, get_user_by_login_id, get_last_attendance,
-    get_setting, update_setting, get_student_attendance_history
+    get_setting, update_setting, get_student_attendance_history,
+    create_reset_request, get_reset_requests, update_reset_request_status,
+    verify_and_reset_password
 )
 from detector import FaceDetector
 from encoder import FaceEncoder
@@ -380,6 +382,72 @@ def admin_download_report():
         as_attachment=True,
         download_name=f"attendance_report_{date_str}.csv"
     )
+
+# ----------------- PASSWORD RESET SYSTEM APIs -----------------
+@app.route('/api/student/forgot-password', methods=['POST'])
+def student_forgot_password():
+    data = request.json
+    login_id = data.get('login_id')
+    if not login_id:
+        return jsonify({"error": "Student Login ID is required"}), 400
+        
+    try:
+        create_reset_request(login_id)
+        return jsonify({"success": True, "message": "Request sent to admin for approval."})
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"error": f"An error occurred: {str(e)}"}), 500
+
+@app.route('/api/student/reset-with-otp', methods=['POST'])
+def student_reset_with_otp():
+    data = request.json
+    login_id = data.get('login_id')
+    otp = data.get('otp')
+    new_password = data.get('new_password')
+    
+    if not login_id or not otp or not new_password:
+        return jsonify({"error": "All fields (Student ID, OTP, and New Password) are required."}), 400
+        
+    try:
+        success, message = verify_and_reset_password(login_id, otp, new_password)
+        if success:
+            return jsonify({"success": True, "message": message})
+        else:
+            return jsonify({"error": message}), 400
+    except Exception as e:
+        return jsonify({"error": f"An error occurred: {str(e)}"}), 500
+
+@app.route('/api/admin/reset-requests', methods=['GET'])
+def admin_get_reset_requests():
+    try:
+        requests_list = get_reset_requests()
+        return jsonify(requests_list)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/admin/reset-requests/<int:request_id>/action', methods=['POST'])
+def admin_reset_request_action(request_id):
+    data = request.json
+    action = data.get('action')
+    admin_id = data.get('admin_id')
+    
+    if not action or action not in ['approve', 'reject']:
+        return jsonify({"error": "Invalid action. Must be 'approve' or 'reject'."}), 400
+    if not admin_id:
+        return jsonify({"error": "Admin ID is required for audit logs."}), 400
+        
+    try:
+        if action == 'approve':
+            import random
+            otp = f"{random.randint(100000, 999999)}"
+            update_reset_request_status(request_id, 'APPROVED', int(admin_id), otp)
+            return jsonify({"success": True, "message": "Request approved.", "otp": otp})
+        else:
+            update_reset_request_status(request_id, 'REJECTED', int(admin_id))
+            return jsonify({"success": True, "message": "Request rejected."})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 # ----------------- MAIN SERVER RUN -----------------
 def open_browser():

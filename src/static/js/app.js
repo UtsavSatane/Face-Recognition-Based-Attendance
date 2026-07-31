@@ -66,6 +66,14 @@ const elements = {
     studentTodayStatus: document.getElementById('student-today-status'),
     studentTodayTime: document.getElementById('student-today-time'),
     studentHistoryBody: document.getElementById('student-history-body'),
+    studentForgotPassLink: document.getElementById('student-forgot-pass-link'),
+    studentForgotView: document.getElementById('student-forgot-view'),
+    studentForgotForm: document.getElementById('student-forgot-form'),
+    forgotBackToLogin: document.getElementById('forgot-back-to-login'),
+    forgotGoToOtp: document.getElementById('forgot-go-to-otp'),
+    studentResetView: document.getElementById('student-reset-view'),
+    studentResetForm: document.getElementById('student-reset-form'),
+    resetBackToLogin: document.getElementById('reset-back-to-login'),
     
     // Admin elements
     adminLoginForm: document.getElementById('admin-login-form'),
@@ -108,7 +116,107 @@ const elements = {
     totalStudentsVal: document.getElementById('total-students-val'),
     todayAttendanceVal: document.getElementById('today-attendance-val'),
     reportsTableBody: document.getElementById('reports-table-body'),
-    downloadReportsBtn: document.getElementById('download-reports-btn')
+    downloadReportsBtn: document.getElementById('download-reports-btn'),
+    resetsTableBody: document.getElementById('resets-table-body'),
+    
+    // Custom Alert Elements
+    customAlertOverlay: document.getElementById('custom-alert-overlay'),
+    customAlertCard: document.getElementById('custom-alert-card'),
+    customAlertIcon: document.getElementById('custom-alert-icon'),
+    customAlertTitle: document.getElementById('custom-alert-title'),
+    customAlertMessage: document.getElementById('custom-alert-message'),
+    customAlertBtn: document.getElementById('custom-alert-btn')
+};
+
+// Custom Alert Modal Function
+function showAlert(message, type = 'info') {
+    const overlay = elements.customAlertOverlay;
+    const card = elements.customAlertCard;
+    const iconContainer = elements.customAlertIcon;
+    const titleEl = elements.customAlertTitle;
+    const msgEl = elements.customAlertMessage;
+    const btn = elements.customAlertBtn;
+
+    if (!overlay || !card) return Promise.resolve();
+
+    // Reset classes
+    card.className = 'custom-alert-modal';
+    iconContainer.className = 'custom-alert-icon';
+
+    // Map types to icons and titles
+    let iconHTML = '';
+    let titleText = '';
+
+    // Apply color theme and icons
+    switch (type.toLowerCase()) {
+        case 'success':
+            card.classList.add('success');
+            iconContainer.classList.add('success');
+            iconHTML = '<i class="fas fa-check-circle"></i>';
+            titleText = 'Success';
+            break;
+        case 'error':
+        case 'danger':
+            card.classList.add('error');
+            iconContainer.classList.add('error');
+            iconHTML = '<i class="fas fa-times-circle"></i>';
+            titleText = 'Error';
+            break;
+        case 'warning':
+            card.classList.add('warning');
+            iconContainer.classList.add('warning');
+            iconHTML = '<i class="fas fa-exclamation-triangle"></i>';
+            titleText = 'Warning';
+            break;
+        case 'info':
+default:
+            card.classList.add('info');
+            iconContainer.classList.add('info');
+            iconHTML = '<i class="fas fa-info-circle"></i>';
+            titleText = 'Notification';
+            break;
+    }
+
+    iconContainer.innerHTML = iconHTML;
+    titleEl.textContent = titleText;
+    msgEl.innerHTML = String(message).replace(/\n/g, '<br>');
+
+    // Show overlay
+    overlay.classList.add('active');
+
+    // Return a promise that resolves when the alert is closed
+    return new Promise((resolve) => {
+        const closeAlert = () => {
+            overlay.classList.remove('active');
+            btn.removeEventListener('click', closeAlert);
+            overlay.removeEventListener('click', overlayClick);
+            resolve();
+        };
+
+        const overlayClick = (e) => {
+            if (e.target === overlay) {
+                closeAlert();
+            }
+        };
+
+        btn.addEventListener('click', closeAlert);
+        overlay.addEventListener('click', overlayClick);
+        btn.focus();
+    });
+}
+
+// Intercept window.alert
+window.alert = function(message) {
+    let type = 'info';
+    const msg = String(message).toLowerCase();
+    if (msg.includes('success') || msg.includes('enrolled') || msg.includes('approved') || msg.includes('successfully') || msg.includes('reset')) {
+        type = 'success';
+    } else if (msg.includes('fail') || msg.includes('error') || msg.includes('denied') || msg.includes('invalid') || msg.includes('incorrect') || msg.includes('not found') || msg.includes('unable to')) {
+        type = 'error';
+    } else if (msg.includes('warn') || msg.includes('must be') || msg.includes('please capture') || msg.includes('attention')) {
+        type = 'warning';
+    }
+    showAlert(message, type);
 };
 
 // Hidden canvas for frame capturing
@@ -176,6 +284,8 @@ function setupNavigation() {
             } else {
                 elements.studentLoginView.style.display = 'block';
                 elements.studentDashboard.style.display = 'none';
+                elements.studentForgotView.style.display = 'none';
+                elements.studentResetView.style.display = 'none';
             }
         }
         if (portalName === 'admin') {
@@ -504,7 +614,7 @@ function setupStudentAuth() {
                 state.studentUser = data.user;
                 showStudentDashboard();
             } else {
-                alert(data.error || 'Authentication Failed');
+                showAlert(data.error || 'Authentication Failed', 'error');
             }
         } catch (err) {
             console.error('Error logging in student:', err);
@@ -516,6 +626,85 @@ function setupStudentAuth() {
         elements.studentLoginForm.reset();
         elements.studentLoginView.style.display = 'block';
         elements.studentDashboard.style.display = 'none';
+    });
+
+    // Toggle Forgot Password View
+    elements.studentForgotPassLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        elements.studentLoginView.style.display = 'none';
+        elements.studentForgotView.style.display = 'block';
+    });
+
+    elements.forgotBackToLogin.addEventListener('click', (e) => {
+        e.preventDefault();
+        elements.studentForgotView.style.display = 'none';
+        elements.studentLoginView.style.display = 'block';
+    });
+
+    elements.forgotGoToOtp.addEventListener('click', (e) => {
+        e.preventDefault();
+        elements.studentForgotView.style.display = 'none';
+        elements.studentResetView.style.display = 'block';
+    });
+
+    elements.resetBackToLogin.addEventListener('click', (e) => {
+        e.preventDefault();
+        elements.studentResetView.style.display = 'none';
+        elements.studentLoginView.style.display = 'block';
+    });
+
+    // Handle Forgot Password Form Submission
+    elements.studentForgotForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const loginId = document.getElementById('forgot-student-id').value.trim();
+        try {
+            const response = await fetch('/api/student/forgot-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ login_id: loginId })
+            });
+            const data = await response.json();
+            if (response.ok) {
+                showAlert(data.message || 'Request sent to admin for approval.', 'success');
+                elements.studentForgotForm.reset();
+                elements.studentForgotView.style.display = 'none';
+                elements.studentResetView.style.display = 'block';
+                document.getElementById('reset-student-id').value = loginId;
+            } else {
+                showAlert(data.error || 'Failed to send request', 'error');
+            }
+        } catch (err) {
+            console.error('Error requesting password reset:', err);
+            showAlert('An error occurred. Please try again.', 'error');
+        }
+    });
+
+    // Handle OTP Password Reset Form Submission
+    elements.studentResetForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const loginId = document.getElementById('reset-student-id').value.trim();
+        const otp = document.getElementById('reset-otp-input').value.trim();
+        const newPassword = document.getElementById('reset-new-password').value.trim();
+
+        try {
+            const response = await fetch('/api/student/reset-with-otp', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ login_id: loginId, otp, new_password: newPassword })
+            });
+            const data = await response.json();
+            if (response.ok) {
+                showAlert(data.message || 'Password reset successfully!', 'success');
+                elements.studentResetForm.reset();
+                elements.studentResetView.style.display = 'none';
+                elements.studentLoginView.style.display = 'block';
+            } else {
+                showAlert(data.error || 'Failed to reset password', 'error');
+            }
+        } catch (err) {
+            console.error('Error resetting password with OTP:', err);
+            showAlert('An error occurred. Please try again.', 'error');
+        }
     });
 }
 
@@ -582,7 +771,7 @@ function setupAdminAuth() {
                 state.adminUser = data.user;
                 showAdminDashboard();
             } else {
-                alert(data.error || 'Authentication Failed');
+                showAlert(data.error || 'Authentication Failed', 'error');
             }
         } catch (err) {
             console.error('Error logging in admin:', err);
@@ -646,9 +835,9 @@ function setupAdminDashboard() {
             if (response.ok) {
                 state.livenessMode = livenessMode;
                 state.similarityThreshold = parseFloat(threshold);
-                alert('System settings updated successfully!');
+                showAlert('System settings updated successfully!', 'success');
             } else {
-                alert('Failed to update settings');
+                showAlert('Failed to update settings', 'error');
             }
         } catch (err) {
             console.error(err);
@@ -678,6 +867,7 @@ function switchAdminTab(tabName) {
     if (tabName === 'directory') fetchStudentDirectory();
     if (tabName === 'classrooms') fetchClassroomDirectories();
     if (tabName === 'reports') fetchAttendanceReports();
+    if (tabName === 'resets') fetchResetRequests();
 }
 
 // Admin Tab: Register Student Camera
@@ -694,7 +884,7 @@ async function startEnrollCamera() {
         elements.btnCaptureEnroll.style.display = 'inline-flex';
     } catch (e) {
         console.error(e);
-        alert('Camera access denied');
+        showAlert('Camera access denied', 'error');
     }
 }
 
@@ -761,7 +951,7 @@ function checkEnrollSubmitStatus() {
 async function handleEnrollment(e) {
     e.preventDefault();
     if (!capturedFrameBase64) {
-        alert('Please capture student face first.');
+        showAlert('Please capture student face first.', 'warning');
         return;
     }
     
@@ -788,18 +978,18 @@ async function handleEnrollment(e) {
         const result = await response.json();
         
         if (response.ok) {
-            alert('Student registered and face enrolled successfully!');
+            showAlert('Student registered and face enrolled successfully!', 'success');
             elements.enrollForm.reset();
             capturedFrameBase64 = null;
             elements.btnStartEnrollCam.innerHTML = '<i class="fas fa-camera"></i> Start Camera & Scan Face';
             elements.btnStartEnrollCam.style.background = '';
             checkEnrollSubmitStatus();
         } else {
-            alert(result.error || 'Failed to enrol student');
+            showAlert(result.error || 'Failed to enrol student', 'error');
         }
     } catch (err) {
         console.error(err);
-        alert('Enrolment error');
+        showAlert('Enrolment error', 'error');
     }
 }
 
@@ -844,7 +1034,7 @@ async function fetchStudentDirectory() {
                             if (res.ok) {
                                 fetchStudentDirectory();
                             } else {
-                                alert('Error deleting student');
+                                showAlert('Error deleting student', 'error');
                             }
                         } catch (err) {
                             console.error(err);
@@ -984,5 +1174,106 @@ async function fetchAttendanceReports() {
         }
     } catch (e) {
         console.error(e);
+    }
+}
+
+// Admin Tab: Password Reset Requests
+async function fetchResetRequests() {
+    try {
+        const response = await fetch('/api/admin/reset-requests');
+        const data = await response.json();
+        
+        elements.resetsTableBody.innerHTML = '';
+        if (data && data.length > 0) {
+            data.forEach(req => {
+                const tr = document.createElement('tr');
+                
+                // Format Status Badge
+                let statusBadge = '';
+                if (req.status === 'PENDING') statusBadge = '<span class="badge badge-warning">PENDING</span>';
+                else if (req.status === 'APPROVED') statusBadge = '<span class="badge badge-success">APPROVED</span>';
+                else if (req.status === 'REJECTED') statusBadge = '<span class="badge badge-danger">REJECTED</span>';
+                else if (req.status === 'EXPIRED') statusBadge = '<span class="badge badge-danger" style="background:var(--danger);opacity:0.6;">EXPIRED</span>';
+                else if (req.status === 'COMPLETED') statusBadge = '<span class="badge badge-success" style="background:#10b981;opacity:0.7;">COMPLETED</span>';
+                
+                // Action column rendering
+                let actionHtml = '';
+                if (req.status === 'PENDING') {
+                    actionHtml = `
+                        <button class="btn-primary btn-approve-reset" data-id="${req.id}" style="padding:0.25rem 0.6rem; font-size:0.8rem; background:#10b981; border:none; margin-right:0.5rem;"><i class="fas fa-check"></i> Approve</button>
+                        <button class="btn-danger btn-reject-reset" data-id="${req.id}" style="padding:0.25rem 0.6rem; font-size:0.8rem; border:none;"><i class="fas fa-times"></i> Reject</button>
+                    `;
+                } else if (req.status === 'APPROVED') {
+                    actionHtml = `OTP: <strong style="color:var(--warning); font-size:1.1rem; letter-spacing:1px;">${req.otp || 'N/A'}</strong>`;
+                } else {
+                    actionHtml = '-';
+                }
+                
+                // Audit logs string
+                let auditHtml = '';
+                if (req.admin_name) {
+                    const actionWord = req.status === 'APPROVED' || req.status === 'COMPLETED' ? 'Approved' : 'Rejected';
+                    auditHtml = `<div style="font-size:0.75rem; color:var(--text-secondary); margin-top:0.2rem;">${actionWord} by ${req.admin_name} (${req.admin_login_id})</div>`;
+                }
+                
+                tr.innerHTML = `
+                    <td>${req.id}</td>
+                    <td>${req.student_name}</td>
+                    <td><code>${req.student_login_id}</code></td>
+                    <td>${req.created_at}</td>
+                    <td>${statusBadge}</td>
+                    <td>
+                        <div>${actionHtml}</div>
+                        ${auditHtml}
+                    </td>
+                `;
+                elements.resetsTableBody.appendChild(tr);
+            });
+            
+            // Add action listeners
+            document.querySelectorAll('.btn-approve-reset').forEach(btn => {
+                btn.addEventListener('click', () => handleResetAction(btn.dataset.id, 'approve'));
+            });
+            document.querySelectorAll('.btn-reject-reset').forEach(btn => {
+                btn.addEventListener('click', () => handleResetAction(btn.dataset.id, 'reject'));
+            });
+            
+        } else {
+            elements.resetsTableBody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-secondary)">No password reset requests found.</td></tr>';
+        }
+    } catch (e) {
+        console.error('Error fetching reset requests:', e);
+    }
+}
+
+async function handleResetAction(requestId, action) {
+    if (!state.adminUser) {
+        showAlert("You must be logged in as admin to perform this action.", "warning");
+        return;
+    }
+    
+    if (confirm(`Are you sure you want to ${action} this password reset request?`)) {
+        try {
+            const response = await fetch(`/api/admin/reset-requests/${requestId}/action`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: action, admin_id: state.adminUser.id })
+            });
+            const data = await response.json();
+            
+            if (response.ok) {
+                if (action === 'approve') {
+                    showAlert(`Request approved! Temporary OTP is: ${data.otp}`, 'success');
+                } else {
+                    showAlert('Request rejected successfully.', 'success');
+                }
+                fetchResetRequests();
+            } else {
+                showAlert(data.error || `Failed to ${action} request`, 'error');
+            }
+        } catch (err) {
+            console.error(err);
+            showAlert('An error occurred. Please try again.', 'error');
+        }
     }
 }

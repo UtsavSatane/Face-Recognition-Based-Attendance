@@ -6,7 +6,9 @@ from src.database import (
     init_db, add_user, get_user_by_name, log_attendance,
     get_attendance_today, get_all_users, delete_user,
     authenticate_user, get_user_by_login_id, get_last_attendance,
-    get_setting, update_setting, get_student_attendance_history
+    get_setting, update_setting, get_student_attendance_history,
+    create_reset_request, get_reset_requests, update_reset_request_status,
+    verify_and_reset_password
 )
 
 TEST_DB_PATH = "data/test_attendance.db"
@@ -223,5 +225,96 @@ def test_classroom_attendance_logging():
     date_str = datetime.now().strftime("%Y-%m-%d")
     daily_csv_path = os.path.join(expected_folder, f"attendance_{date_str}.csv")
     assert os.path.exists(daily_csv_path)
+
+def test_password_reset_flow():
+    """Tests the password reset request, rate limiting, approval, OTP expiration, and one-time use functionality."""
+    # Register student and admin
+    student_id = add_user("Utsav Satane", "001", "oldpwd", "student", TEST_DB_PATH)
+    admin_id = add_user("Admin User", "testadmin", "admin123", "admin", TEST_DB_PATH)
+    
+    # 1. Create reset request
+    req_id = create_reset_request("001", TEST_DB_PATH)
+    assert req_id > 0
+    
+    # Verify it exists in pending requests
+    requests = get_reset_requests(TEST_DB_PATH)
+    assert len(requests) == 1
+    assert requests[0]["student_name"] == "Utsav Satane"
+    assert requests[0]["status"] == "PENDING"
+    assert requests[0]["otp"] is None
+    
+    # 2. Test Rate Limiting (requesting again within 15 minutes fails)
+    with pytest.raises(ValueError, match="once every 15 minutes"):
+        create_reset_request("001", TEST_DB_PATH)
+        
+    # 3. Approve request with an OTP
+    otp = "123456"
+    update_reset_request_status(req_id, "APPROVED", admin_id, otp, TEST_DB_PATH)
+    
+    # Verify status changed and OTP is set
+    requests = get_reset_requests(TEST_DB_PATH)
+    assert requests[0]["status"] == "APPROVED"
+    assert requests[0]["otp"] == "123456"
+    assert requests[0]["admin_name"] == "Admin User"
+    
+    # 4. Test verify and reset (wrong OTP fails)
+    success, msg = verify_and_reset_password("001", "wrongotp", "newpwd", TEST_DB_PATH)
+    assert not success
+    assert "Invalid OTP" in msg
+    
+    # Verify password hasn't changed (still old hash)
+    assert authenticate_user("001", "oldpwd", TEST_DB_PATH) is not None
+    assert authenticate_user("001", "newpwd", TEST_DB_PATH) is None
+    
+    # 5. Test verify and reset (correct OTP succeeds)
+    success, msg = verify_and_reset_password("001", "123456", "newpwd", TEST_DB_PATH)
+    assert success
+    assert "successfully reset" in msg
+    
+    # Verify password updated and authenticates successfully
+    assert authenticate_user("001", "oldpwd", TEST_DB_PATH) is None
+    assert authenticate_user("001", "newpwd", TEST_DB_PATH) is not None
+    
+    # 6. Test One-Time Use (attempting to use OTP again fails)
+    requests = get_reset_requests(TEST_DB_PATH)
+    assert requests[0]["status"] == "COMPLETED"
+    assert requests[0]["otp"] is None
+    
+    success, msg = verify_and_reset_password("001", "123456", "anotherpwd", TEST_DB_PATH)
+    assert not success
+    assert "Invalid OTP" in msg
+
+def test_password_reset_otp_expiration():
+    """Tests that reset OTPs cannot be used after the 15-minute expiration window."""
+    student_id = add_user("Utsav Satane", "001", "oldpwd", "student", TEST_DB_PATH)
+    admin_id = add_user("Admin User", "testadmin", "admin123", "admin", TEST_DB_PATH)
+    
+    req_id = create_reset_request("001", TEST_DB_PATH)
+    
+    # Approve request
+    otp = "654321"
+    update_reset_request_status(req_id, "APPROVED", admin_id, otp, TEST_DB_PATH)
+    
+    # Simulate expiration by manually setting approved_at to 20 minutes ago
+    import sqlite3
+    from datetime import timedelta
+    from src.database import get_ist_now
+    expired_time = (get_ist_now() - timedelta(minutes=20)).strftime("%Y-%m-%d %H:%M:%S")
+    
+    conn = sqlite3.connect(TEST_DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE password_resets SET approved_at = ? WHERE id = ?", (expired_time, req_id))
+    conn.commit()
+    conn.close()
+    
+    # Verify and reset should fail due to expiration
+    success, msg = verify_and_reset_password("001", "654321", "newpwd", TEST_DB_PATH)
+    assert not success
+    assert "expired" in msg.lower()
+    
+    # Check that status changed to EXPIRED
+    requests = get_reset_requests(TEST_DB_PATH)
+    assert requests[0]["status"] == "EXPIRED"
+    assert requests[0]["otp"] is None
 
 
