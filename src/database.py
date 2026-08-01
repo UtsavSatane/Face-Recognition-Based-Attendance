@@ -293,11 +293,24 @@ def get_attendance_today(db_path: str = "data/attendance.db") -> list:
     conn.close()
     return [dict(row) for row in rows]
 
-def get_all_users(db_path: str = "data/attendance.db") -> list:
-    """Retrieves all registered users (usually filters to role='student' or sorted name)."""
+def get_all_users(db_path: str = "data/attendance.db", department: str = None, section: str = None) -> list:
+    """Retrieves all registered students, optionally filtered by department and/or section, ordered by name."""
     conn = get_db_connection(db_path)
     cursor = conn.cursor()
-    cursor.execute("SELECT id, name, login_id, role, department, section, created_at FROM users WHERE role = 'student' ORDER BY name ASC")
+    
+    query = "SELECT id, name, login_id, role, department, section, created_at FROM users WHERE role = 'student'"
+    params = []
+    
+    if department:
+        query += " AND department = ?"
+        params.append(department)
+    if section:
+        query += " AND section = ?"
+        params.append(section)
+        
+    query += " ORDER BY name ASC"
+    
+    cursor.execute(query, params)
     rows = cursor.fetchall()
     conn.close()
     return [dict(row) for row in rows]

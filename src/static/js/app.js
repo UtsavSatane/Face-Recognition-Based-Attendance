@@ -21,7 +21,13 @@ let state = {
     adminUser: null,
     
     // Admin tabs
-    activeAdminTab: 'enroll'
+    activeAdminTab: 'enroll',
+    
+    // Directory Filters
+    directoryFilters: {
+        department: null,
+        section: null
+    }
 };
 
 // DOM Elements
@@ -105,6 +111,10 @@ const elements = {
     
     // Admin Tab: Directory
     studentDirectoryList: document.getElementById('student-directory-list'),
+    directoryDeptSelect: document.getElementById('directory-dept'),
+    directorySecSelect: document.getElementById('directory-sec'),
+    btnDirectoryFilter: document.getElementById('btn-directory-filter'),
+    btnDirectoryShowAll: document.getElementById('btn-directory-show-all'),
     
     // Admin Tab: Classrooms
     classroomSelect: document.getElementById('classroom-select'),
@@ -847,6 +857,25 @@ function setupAdminDashboard() {
     // Classroom inspection
     elements.classroomSelect.addEventListener('change', handleClassroomSelect);
     elements.classroomFileSelect.addEventListener('change', handleClassroomFileSelect);
+    
+    // Directory filters
+    elements.btnDirectoryFilter.addEventListener('click', () => {
+        const department = elements.directoryDeptSelect.value;
+        const section = elements.directorySecSelect.value;
+        if (!department || !section) {
+            showAlert('Please select both a department and a section.', 'warning');
+            return;
+        }
+        state.directoryFilters = { department, section };
+        fetchStudentDirectory(department, section);
+    });
+    
+    elements.btnDirectoryShowAll.addEventListener('click', () => {
+        elements.directoryDeptSelect.value = '';
+        elements.directorySecSelect.value = '';
+        state.directoryFilters = { department: null, section: null };
+        fetchStudentDirectory();
+    });
 }
 
 function switchAdminTab(tabName) {
@@ -864,7 +893,18 @@ function switchAdminTab(tabName) {
     });
     
     // Tab specific load actions
-    if (tabName === 'directory') fetchStudentDirectory();
+    if (tabName === 'directory') {
+        elements.directoryDeptSelect.value = '';
+        elements.directorySecSelect.value = '';
+        state.directoryFilters = { department: null, section: null };
+        elements.studentDirectoryList.innerHTML = `
+            <div style="text-align:center;color:var(--text-secondary);padding: 2.5rem 1.5rem;background:rgba(255,255,255,0.02);border-radius:12px;border:1px dashed var(--border-color)">
+                <i class="fas fa-filter" style="font-size: 2.5rem; margin-bottom: 1rem; display: block; color: var(--accent-primary); opacity: 0.7;"></i>
+                <p style="font-size:1.1rem;font-weight:500;margin-bottom:0.5rem;color:var(--text-primary)">Filter Student Directory</p>
+                <p style="font-size:0.9rem;max-width:400px;margin:0 auto;line-height:1.5">Please select a department and section above, then click <b>View Students</b>, or click <b>Display All</b> to see everyone.</p>
+            </div>
+        `;
+    }
     if (tabName === 'classrooms') fetchClassroomDirectories();
     if (tabName === 'reports') fetchAttendanceReports();
     if (tabName === 'resets') fetchResetRequests();
@@ -994,9 +1034,17 @@ async function handleEnrollment(e) {
 }
 
 // Admin Tab: Student Directory
-async function fetchStudentDirectory() {
+async function fetchStudentDirectory(department = null, section = null) {
     try {
-        const response = await fetch('/api/admin/students');
+        let url = '/api/admin/students';
+        const params = new URLSearchParams();
+        if (department) params.append('department', department);
+        if (section) params.append('section', section);
+        if (params.toString()) {
+            url += '?' + params.toString();
+        }
+        
+        const response = await fetch(url);
         const students = await response.json();
         
         elements.studentDirectoryList.innerHTML = '';
@@ -1032,7 +1080,7 @@ async function fetchStudentDirectory() {
                                 body: JSON.stringify({ id: studentId, login_id: loginId })
                             });
                             if (res.ok) {
-                                fetchStudentDirectory();
+                                fetchStudentDirectory(state.directoryFilters.department, state.directoryFilters.section);
                             } else {
                                 showAlert('Error deleting student', 'error');
                             }
@@ -1043,7 +1091,8 @@ async function fetchStudentDirectory() {
                 });
             });
         } else {
-            elements.studentDirectoryList.innerHTML = '<div style="text-align:center;color:var(--text-secondary)">No enrolled students found.</div>';
+            const filterInfo = (department || section) ? 'matching the selected filters' : 'found';
+            elements.studentDirectoryList.innerHTML = `<div style="text-align:center;color:var(--text-secondary)">No enrolled students ${filterInfo}.</div>`;
         }
     } catch (e) {
         console.error(e);

@@ -204,7 +204,12 @@ def admin_login():
 
 @app.route('/api/admin/students', methods=['GET'])
 def admin_students_directory():
-    students = get_all_users()
+    department = request.args.get('department')
+    section = request.args.get('section')
+    students = get_all_users(
+        department=department if department else None,
+        section=section if section else None
+    )
     return jsonify(students)
 
 @app.route('/api/admin/delete_student', methods=['POST'])

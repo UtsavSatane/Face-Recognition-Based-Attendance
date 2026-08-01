@@ -318,3 +318,36 @@ def test_password_reset_otp_expiration():
     assert requests[0]["otp"] is None
 
 
+def test_get_all_users_filtered():
+    """Tests retrieving a filtered list of users based on department and section."""
+    add_user("Alice", "alice", "pwd", "student", TEST_DB_PATH, "CSE", "A")
+    add_user("Bob", "bob", "pwd", "student", TEST_DB_PATH, "CSE", "B")
+    add_user("Charlie", "charlie", "pwd", "student", TEST_DB_PATH, "ECE", "A")
+    
+    # 1. Filter by Department CSE
+    cse_users = get_all_users(TEST_DB_PATH, department="CSE")
+    assert len(cse_users) == 2
+    assert cse_users[0]["name"] == "Alice"
+    assert cse_users[1]["name"] == "Bob"
+    
+    # 2. Filter by Section A
+    sec_a_users = get_all_users(TEST_DB_PATH, section="A")
+    assert len(sec_a_users) == 2
+    assert sec_a_users[0]["name"] == "Alice"
+    assert sec_a_users[1]["name"] == "Charlie"
+    
+    # 3. Filter by CSE and Section A
+    cse_a_users = get_all_users(TEST_DB_PATH, department="CSE", section="A")
+    assert len(cse_a_users) == 1
+    assert cse_a_users[0]["name"] == "Alice"
+    
+    # 4. Filter by CSE and Section B
+    cse_b_users = get_all_users(TEST_DB_PATH, department="CSE", section="B")
+    assert len(cse_b_users) == 1
+    assert cse_b_users[0]["name"] == "Bob"
+    
+    # 5. Non-existent filter
+    none_users = get_all_users(TEST_DB_PATH, department="CE", section="C")
+    assert len(none_users) == 0
+
+
