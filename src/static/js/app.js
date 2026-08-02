@@ -393,6 +393,7 @@ async function startKioskCamera() {
 
 function stopKioskCamera() {
     state.isScanning = false;
+    isProcessingKioskFrame = false;
     if (state.cameraInterval) {
         clearInterval(state.cameraInterval);
         state.cameraInterval = null;
@@ -465,8 +466,12 @@ function updateLivenessChecklist() {
     }
 }
 
+let isProcessingKioskFrame = false;
+
 async function processKioskFrame() {
-    if (!state.isScanning) return;
+    if (!state.isScanning || isProcessingKioskFrame) return;
+    
+    isProcessingKioskFrame = true;
     
     // Capture current webcam frame
     captureCtx.drawImage(elements.webcam, 0, 0, captureCanvas.width, captureCanvas.height);
@@ -532,6 +537,10 @@ async function processKioskFrame() {
                     // Stop camera, show success overlay
                     stopKioskCamera();
                     showSuccessOverlay(result.name);
+                } else if (result.error === "Attendance is marked") {
+                    // Stop camera, show popup
+                    stopKioskCamera();
+                    showAlert("Attendance is marked", "info");
                 } else if (result.sim_score > 0) {
                     elements.kioskStatus.innerHTML = `<span style="color:var(--warning)">Scanning... Sim: ${result.sim_score.toFixed(2)}</span>`;
                 }
@@ -542,6 +551,8 @@ async function processKioskFrame() {
         }
     } catch (e) {
         console.error('Error processing frame:', e);
+    } finally {
+        isProcessingKioskFrame = false;
     }
 }
 

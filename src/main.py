@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 from datetime import datetime, timedelta
 import webbrowser
-from threading import Timer
+from threading import Timer, Lock
 from flask import Flask, render_template, request, jsonify, send_file
 
 from database import (
@@ -32,6 +32,7 @@ app.secret_key = "bioaccess_secure_face_attendance_key"
 # Initialize AI models globally
 detector = FaceDetector()
 encoder = FaceEncoder()
+kiosk_lock = Lock()
 
 def decode_base64_image(base64_string):
     """Converts a base64 image string into an OpenCV image (numpy array)."""
@@ -101,34 +102,35 @@ def process_kiosk_frame():
     
     # If client says liveness has been verified, perform face recognition
     if liveness_verified:
-        similarity_threshold = float(get_setting("similarity_threshold", "0.5"))
-        liveness_mode = get_setting("liveness_mode", "Blink & Head Turn")
-        
-        emb = encoder.generate_embedding(frame)
-        if emb is not None:
-            match_id, sim = encoder.find_match(emb, similarity_threshold)
-            response_data["sim_score"] = sim
+        with kiosk_lock:
+            similarity_threshold = float(get_setting("similarity_threshold", "0.5"))
+            liveness_mode = get_setting("liveness_mode", "Blink & Head Turn")
             
-            if match_id is not None:
-                student = get_user_by_login_id(match_id)
-                if student:
-                    last_log = get_last_attendance(student['id'])
-                    now = get_ist_now()
-                    can_mark = True
-                    if last_log is not None and (now - last_log) < timedelta(hours=6):
-                        can_mark = False
-                        
-                    if not can_mark:
-                        response_data["error"] = f"Already checked in: {student['name']}"
-                    else:
-                        log_attendance(student['id'], liveness_method=liveness_mode)
-                        response_data["matched"] = True
-                        response_data["name"] = student['name']
-                        response_data["login_id"] = student['login_id']
+            emb = encoder.generate_embedding(frame)
+            if emb is not None:
+                match_id, sim = encoder.find_match(emb, similarity_threshold)
+                response_data["sim_score"] = sim
+                
+                if match_id is not None:
+                    student = get_user_by_login_id(match_id)
+                    if student:
+                        last_log = get_last_attendance(student['id'])
+                        now = get_ist_now()
+                        can_mark = True
+                        if last_log is not None and (now - last_log) < timedelta(hours=6):
+                            can_mark = False
+                            
+                        if not can_mark:
+                            response_data["error"] = "Attendance is marked"
+                        else:
+                            log_attendance(student['id'], liveness_method=liveness_mode)
+                            response_data["matched"] = True
+                            response_data["name"] = student['name']
+                            response_data["login_id"] = student['login_id']
+                else:
+                    response_data["error"] = "No matching student profile found"
             else:
-                response_data["error"] = "No matching student profile found"
-        else:
-            response_data["error"] = "Failed to extract face embedding"
+                response_data["error"] = "Failed to extract face embedding"
             
     return jsonify(response_data)
 

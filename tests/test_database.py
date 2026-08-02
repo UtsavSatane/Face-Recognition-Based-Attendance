@@ -351,3 +351,43 @@ def test_get_all_users_filtered():
     assert len(none_users) == 0
 
 
+def test_6_hour_attendance_interval_check():
+    """Verifies that the 6-hour interval check correctly determines if a student can check in again."""
+    from datetime import timedelta
+    from src.database import get_ist_now
+    
+    user_id = add_user("Frank Castle", "frank", "pwd", "student", TEST_DB_PATH)
+    
+    # First check-in
+    log_attendance(user_id, "Blink Only", TEST_DB_PATH)
+    
+    # Retrieve last attendance and check if less than 6 hours
+    last_log = get_last_attendance(user_id, TEST_DB_PATH)
+    assert last_log is not None
+    
+    now = get_ist_now()
+    time_diff = now - last_log
+    
+    # Since it was logged just now, diff is less than 6 hours
+    assert time_diff < timedelta(hours=6)
+    
+    # Simulate a log from 7 hours ago
+    import sqlite3
+    seven_hours_ago = (now - timedelta(hours=7)).strftime("%Y-%m-%d %H:%M:%S")
+    
+    conn = sqlite3.connect(TEST_DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE attendance SET timestamp = ? WHERE user_id = ?", (seven_hours_ago, user_id))
+    conn.commit()
+    conn.close()
+    
+    # Fetch last log again
+    last_log = get_last_attendance(user_id, TEST_DB_PATH)
+    assert last_log is not None
+    time_diff = get_ist_now() - last_log
+    
+    # Now it is more than 6 hours, so they should be able to log again
+    assert time_diff >= timedelta(hours=6)
+
+
+
