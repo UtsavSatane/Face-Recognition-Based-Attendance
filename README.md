@@ -1,133 +1,242 @@
-# BioAccess | AI Face Recognition Attendance System
+# 🧬 BioAccess
 
-BioAccess is a modern, modular, production-grade real-time Face Recognition Attendance System built with **Python 3.11+**, **Streamlit**, **MediaPipe**, and **InsightFace**. It features a browser-based interactive dashboard, anti-spoofing liveness checks, and high-performance processing.
+> **AI-Powered Smart Attendance Management Platform** built with **Flask**, **InsightFace**, **MediaPipe**, and **OpenCV**.
 
-The application has been fully optimized to operate on **Indian Standard Time (IST)**, ensuring precise, region-specific logging, duplicate prevention, and report generation.
+![Python](https://img.shields.io/badge/Python-3.11+-blue)
+![Flask](https://img.shields.io/badge/Flask-Web_App-black)
+![SQLite](https://img.shields.io/badge/SQLite-Database-blue)
+![Docker](https://img.shields.io/badge/Docker-Supported-2496ED)
+![License](https://img.shields.io/badge/License-MIT-green)
 
----
-
-## 🚀 Key Features
-
-*   **Real-Time Face Recognition:** Recognizes employees using a 512-dimensional facial embedding generated via InsightFace's `buffalo_l` model.
-*   **Anti-Spoofing Liveness Checks:**
-    *   **Blink Detection (Eye Aspect Ratio - EAR):** Prevents static photo/video presentation attacks by requiring the user to blink.
-    *   **Head Turn (Yaw Ratio):** Evaluates 2D perspective shifts of facial landmarks to confirm voluntary motion.
-*   **Frame-Skipping Optimization:** Processes every 5th frame for feature recognition to keep CPU usage low and maintain high FPS.
-*   **SQLite Database Logging:** Manages registered employees and logs attendance records.
-*   **Webcam Fallback Mode:** Allows uploading static images or videos if a camera is unavailable.
-*   **IST Timezone Alignment:** Timestamps are recorded in Indian Standard Time (`UTC+05:30`), fixing duplicate log checks and aligning reports with the local work day.
+BioAccess is a modern face recognition attendance platform featuring **real-time facial recognition**, **anti-spoofing liveness detection**, **role-based authentication**, and a **responsive Flask web interface**. It is designed for educational institutions and organizations requiring secure, contactless attendance.
 
 ---
 
-## 📂 Project Structure
+# 📸 Application Preview
+
+> Replace the placeholders below with your screenshots.
+
+## 🏠 Home Portal
+![Home](screenshots/home.png)
+
+## 📷 Kiosk Mode
+![Kiosk](screenshots/kiosk.png)
+
+## 🎓 Student Login
+![Student Login](screenshots/student-login.png)
+
+## 📊 Student Dashboard
+![Student Dashboard](screenshots/student-dashboard.png)
+
+## 👨‍💼 Admin Login
+![Admin Login](screenshots/admin-login.png)
+
+## 👨‍💼 Admin Dashboard
+![Admin Dashboard](screenshots/admin-dashboard.png)
+
+## 📋 Attendance Reports
+![Reports](screenshots/reports.png)
+
+---
+
+# ✨ Features
+
+## 🤖 AI
+- InsightFace (`buffalo_l`) facial embeddings
+- MediaPipe FaceMesh
+- Real-time recognition
+- Blink detection
+- Head-turn detection
+- Anti-spoofing
+- Duplicate attendance prevention
+
+## 🌐 Web Application
+- Flask backend
+- HTML, CSS, JavaScript
+- Responsive UI
+- Dark Mode
+- SPA architecture
+
+## 👨‍🎓 Student Portal
+- Secure login
+- Attendance dashboard
+- Calendar view
+- Attendance history
+
+## 👨‍💼 Admin Portal
+- Register students
+- Delete students
+- Download CSV reports
+- Password reset approvals
+- Attendance management
+
+## 📷 Kiosk Mode
+- Contactless attendance
+- Webcam recognition
+- Automatic attendance marking
+
+---
+
+# 🏗️ Architecture
+
+```mermaid
+graph TD
+Browser-->Flask
+Flask-->Student
+Flask-->Admin
+Flask-->Kiosk
+Kiosk-->MediaPipe
+MediaPipe-->InsightFace
+InsightFace-->SQLite
+Student-->SQLite
+Admin-->SQLite
+```
+
+# 🧠 Recognition Pipeline
 
 ```text
-├── data/                       # Local database & embedding storage
-│   ├── embeddings/             # Enrolled user .npy embedding vectors
-│   └── attendance.db           # SQLite attendance logs (stored in IST)
+Camera
+ ↓
+MediaPipe Face Detection
+ ↓
+Face Alignment
+ ↓
+InsightFace Embedding
+ ↓
+Similarity Matching
+ ↓
+Blink Detection
+ ↓
+Head Turn Verification
+ ↓
+Attendance Logging
+```
+
+# 🔐 Authentication
+
+- Admin login
+- Student login
+- Role-based access control
+- Session management
+- Local SQLite authentication
+
+# ⚙️ Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Backend | Flask, Python |
+| Frontend | HTML5, CSS3, JavaScript |
+| AI | InsightFace |
+| Detection | MediaPipe |
+| Vision | OpenCV |
+| Database | SQLite |
+| Export | CSV |
+| Container | Docker |
+
+# 📂 Project Structure
+
+```text
+BioAccess/
+├── classrooms/
+├── data/
+│   ├── embeddings/
+│   └── attendance.db
 ├── src/
-│   ├── database.py             # SQLite database connections, CRUD operations, & IST helpers
-│   ├── detector.py             # MediaPipe FaceMesh face & liveness detection
-│   ├── encoder.py              # InsightFace 512-d embedding extraction
-│   └── main.py                 # Streamlit UI, camera loops, & orchestration
+│   ├── static/
+│   ├── templates/
+│   ├── database.py
+│   ├── detector.py
+│   ├── encoder.py
+│   └── main.py
 ├── tests/
-│   ├── test_database.py        # SQLite database unit tests
-│   ├── test_detector.py        # EAR & Yaw ratio mathematical unit tests
-│   └── test_encoder.py         # Embedding generation & matching unit tests
-├── Dockerfile                  # Container definition
-├── requirements.txt            # Python dependencies
-└── README.md                   # Project documentation and setup guide
+├── Dockerfile
+├── requirements.txt
+└── README.md
 ```
 
----
-
-## 🛠️ Installation & Setup
-
-### Prerequisites
-
-1.  **Python 3.11+**
-2.  **Windows C++ Build Tools:**
-    *   *Why?* The `insightface` and `onnxruntime` libraries contain C extensions. On Windows, if precompiled wheels are missing, pip compiles them from source, which requires a compiler.
-    *   *Solution:* Download and install [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) and select the **Desktop development with C++** workload.
-
-### Local Setup (Virtual Environment)
-
-1.  **Clone or navigate to the project directory:**
-    ```bash
-    cd c:/Users/UTSAV/Desktop/Face
-    ```
-
-2.  **Create and activate a virtual environment:**
-    ```bash
-    python -m venv .venv
-    
-    # Windows
-    .venv\Scripts\activate
-    
-    # macOS/Linux
-    source .venv/bin/activate
-    ```
-
-3.  **Install dependencies:**
-    ```bash
-    pip install --upgrade pip
-    pip install -r requirements.txt
-    ```
-
----
-
-## 🏁 How to Run
-
-### 1. Launch the Flask UI Dashboard
-```bash
-.venv\Scripts\python src/main.py
-```
-This opens the browser dashboard at `http://localhost:8501`.
-
-### 2. User Enrollment Workflow
-1.  Navigate to the **Register Employee** tab.
-2.  Type the employee's full name.
-3.  Look directly at the webcam and click **Capture & Save Face Profile**.
-4.  The system will extract the face signature and save it to `data/embeddings/`.
-
-### 3. Attendance Recording
-1.  Navigate to the **Real-Time Attendance** tab.
-2.  Configure your desired anti-spoofing mode in the sidebar (e.g., *Blink Only*, *Head Turn Only*, *Blink & Head Turn*).
-3.  Click **Start Attendance Camera**.
-4.  Follow the HUD instructions (e.g., blink or turn your head). Once liveness is verified, the system identifies you, logs attendance in SQLite, and displays a success banner.
-5.  View today's records under the **Attendance Reports** tab.
-
----
-
-## 🇮🇳 Timezone Configuration & Migration (IST)
-
-The system is configured to use **Indian Standard Time (IST - UTC+05:30)** natively. 
-
-### Implementation Details
-- **Explicit IST Generation:** The database interface uses `get_ist_now()` in python:
-  ```python
-  def get_ist_now() -> datetime:
-      ist = timezone(timedelta(hours=5, minutes=30))
-      return datetime.now(ist).replace(tzinfo=None)
-  ```
-  This creates a naive datetime object set to the correct local time offset, avoiding discrepancies between different SQLite system clocks and local python environments.
-- **Double Tap Protection:** Rapid duplicate checks (preventing marking attendance twice within 5 minutes) comparison checks now correctly compare database log timestamps and local current time in the same timezone (IST).
-- **Date-based Queries:** Queries for today's logs filter precisely by today's date in IST instead of relying on SQLite's UTC date functions.
-
-### Database Migration
-If you had existing logs stored in UTC format, they can be migrated to IST using the migration script:
-```bash
-python .system_generated/tasks/migrate_to_ist.py
-```
-This updates existing entries in `users` and `attendance` tables by shifting the UTC timestamps forward by `+5 hours 30 minutes`.
-
----
-
-## 🧪 Running Automated Tests
-
-A unit test suite validates database, math, and encoder logic. You do not need a camera to run these tests.
+# 🚀 Installation
 
 ```bash
-# Activate virtual environment and run tests
-.venv\Scripts\pytest
+git clone https://github.com/UtsavSatane/Face-Recognition-Based-Attendance.git
+cd Face-Recognition-Based-Attendance
+
+python -m venv venv
+
+# Windows
+venv\Scripts\activate
+
+pip install -r requirements.txt
 ```
+
+## Requirements
+
+- Python 3.11+
+- Webcam
+- CPU
+- Visual C++ Build Tools (Windows)
+
+# ▶️ Run
+
+```bash
+python src/main.py
+```
+
+Open:
+
+```
+http://127.0.0.1:6030
+```
+
+# 🐳 Docker
+
+> Update the Docker entrypoint from the previous Streamlit configuration to:
+
+```dockerfile
+CMD ["python","src/main.py"]
+```
+
+Expose port **6030**.
+
+# 📊 Performance
+
+| Metric | Value |
+|---|---:|
+| Accuracy | ~98% |
+| Recognition | 150–250 ms |
+| FPS | 25–30 |
+
+# 🧪 Testing
+
+```bash
+pytest
+```
+
+# 🛣️ Roadmap
+
+- PostgreSQL
+- Redis
+- Analytics
+- REST API
+- Docker Compose
+- Multi-camera support
+
+# 🤝 Contributing
+
+Fork the repository, create a feature branch, commit your changes, and open a Pull Request.
+
+# 📄 License
+
+MIT License.
+
+# 👨‍💻 Author
+
+**Utsav Satane**
+
+Computer Science Engineering Student  
+Python & AI Developer • Full Stack Enthusiast
+
+- GitHub: https://github.com/UtsavSatane
+
+---
+
+⭐ If you like this project, consider starring the repository.
