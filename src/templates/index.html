@@ -210,7 +210,22 @@
                                 <span class="profile-value" id="student-sec">...</span>
                             </div>
                             
-                            <button class="btn-primary" id="student-logout" style="width: 100%; margin-top: 1.5rem; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); color: var(--text-secondary);"><i class="fas fa-unlock"></i> Logout</button>
+                        </div>
+                        
+                        <!-- Attendance Calendar -->
+                        <div class="glass-card calendar-card">
+                            <div class="calendar-header">
+                                <button type="button" id="calendar-prev" class="calendar-nav-btn" title="Previous Month">
+                                    <i class="fas fa-chevron-left"></i>
+                                </button>
+                                <h3 id="calendar-month-year">August 2026</h3>
+                                <button type="button" id="calendar-next" class="calendar-nav-btn" title="Next Month">
+                                    <i class="fas fa-chevron-right"></i>
+                                </button>
+                            </div>
+                            <div class="calendar-grid" id="calendar-days">
+                                <!-- Filled by JS -->
+                            </div>
                         </div>
                     </aside>
                     

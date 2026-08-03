@@ -27,7 +27,12 @@ let state = {
     directoryFilters: {
         department: null,
         section: null
-    }
+    },
+    
+    // Calendar specific states
+    calendarYear: new Date().getFullYear(),
+    calendarMonth: new Date().getMonth(),
+    studentAttendanceHistory: []
 };
 
 // DOM Elements
@@ -80,6 +85,12 @@ const elements = {
     studentResetView: document.getElementById('student-reset-view'),
     studentResetForm: document.getElementById('student-reset-form'),
     resetBackToLogin: document.getElementById('reset-back-to-login'),
+    
+    // Calendar elements
+    calendarMonthYear: document.getElementById('calendar-month-year'),
+    calendarDays: document.getElementById('calendar-days'),
+    calendarPrev: document.getElementById('calendar-prev'),
+    calendarNext: document.getElementById('calendar-next'),
     
     // Admin elements
     adminLoginForm: document.getElementById('admin-login-form'),
@@ -242,6 +253,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupAdminAuth();
     setupAdminDashboard();
     fetchSystemSettings();
+    setupCalendarControls();
 });
 
 // Fetch system settings on load
@@ -744,6 +756,11 @@ async function showStudentDashboard() {
         const response = await fetch(`/api/student/dashboard?user_id=${state.studentUser.id}`);
         const data = await response.json();
         
+        // Reset calendar view to current month/year on dashboard entry
+        state.calendarYear = new Date().getFullYear();
+        state.calendarMonth = new Date().getMonth();
+        state.studentAttendanceHistory = data.history || [];
+        
         // Today status
         if (data.marked_today) {
             elements.studentTodayStatus.innerHTML = '<span class="badge badge-success">● Checked In</span>';
@@ -768,8 +785,151 @@ async function showStudentDashboard() {
         } else {
             elements.studentHistoryBody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--text-secondary)">No attendance records found.</td></tr>';
         }
+        
+        // Render attendance calendar
+        renderCalendar();
     } catch (e) {
         console.error('Error fetching student dashboard:', e);
+    }
+}
+
+// Setup Calendar navigational listeners
+function setupCalendarControls() {
+    if (elements.calendarPrev) {
+        elements.calendarPrev.addEventListener('click', () => {
+            state.calendarMonth--;
+            if (state.calendarMonth < 0) {
+                state.calendarMonth = 11;
+                state.calendarYear--;
+            }
+            renderCalendar();
+        });
+    }
+    
+    if (elements.calendarNext) {
+        elements.calendarNext.addEventListener('click', () => {
+            state.calendarMonth++;
+            if (state.calendarMonth > 11) {
+                state.calendarMonth = 0;
+                state.calendarYear++;
+            }
+            renderCalendar();
+        });
+    }
+}
+
+// Generate monthly attendance calendar grid
+function renderCalendar() {
+    const monthNames = [
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
+    ];
+    
+    const year = state.calendarYear;
+    const month = state.calendarMonth;
+    
+    // Update header Month Year title text
+    if (elements.calendarMonthYear) {
+        elements.calendarMonthYear.textContent = `${monthNames[month]} ${year}`;
+    }
+    
+    if (!elements.calendarDays) return;
+    
+    // Reset and add day headers M T W T F S S
+    elements.calendarDays.innerHTML = `
+        <div class="calendar-day-header">M</div>
+        <div class="calendar-day-header">T</div>
+        <div class="calendar-day-header">W</div>
+        <div class="calendar-day-header">T</div>
+        <div class="calendar-day-header">F</div>
+        <div class="calendar-day-header">S</div>
+        <div class="calendar-day-header">S</div>
+    `;
+    
+    // Parse dates (YYYY-MM-DD) from attendance logs
+    const checkedInDates = new Set();
+    state.studentAttendanceHistory.forEach(log => {
+        if (log.timestamp) {
+            // log.timestamp is "YYYY-MM-DD hh:mm AM/PM"
+            const datePart = log.timestamp.substring(0, 10);
+            checkedInDates.add(datePart);
+        }
+    });
+    
+    // Today's current local date values
+    const today = new Date();
+    const todayYear = today.getFullYear();
+    const todayMonth = today.getMonth();
+    const todayDate = today.getDate();
+    
+    // Number of days in current month
+    const numDays = new Date(year, month + 1, 0).getDate();
+    
+    // Number of days in previous month
+    const numDaysPrev = new Date(year, month, 0).getDate();
+    
+    // Get day index of the 1st of this month (Sunday is 0, Monday is 1, ...)
+    const firstDayOfWeek = new Date(year, month, 1).getDay();
+    // Adjust to Monday-indexed (0 = Monday, 6 = Sunday)
+    const firstDayIndex = firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1;
+    
+    // 1. Render previous month padding days
+    for (let i = firstDayIndex - 1; i >= 0; i--) {
+        const d = numDaysPrev - i;
+        const prevMonthVal = month === 0 ? 11 : month - 1;
+        const prevYearVal = month === 0 ? year - 1 : year;
+        
+        const dayDiv = document.createElement('div');
+        dayDiv.className = 'calendar-day padding-day';
+        dayDiv.textContent = d;
+        
+        const dateStr = `${prevYearVal}-${String(prevMonthVal + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        if (checkedInDates.has(dateStr)) {
+            dayDiv.classList.add('marked');
+        }
+        if (todayYear === prevYearVal && todayMonth === prevMonthVal && todayDate === d) {
+            dayDiv.classList.add('today');
+        }
+        elements.calendarDays.appendChild(dayDiv);
+    }
+    
+    // 2. Render current month days
+    for (let d = 1; d <= numDays; d++) {
+        const dayDiv = document.createElement('div');
+        dayDiv.className = 'calendar-day current-month';
+        dayDiv.textContent = d;
+        
+        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        if (checkedInDates.has(dateStr)) {
+            dayDiv.classList.add('marked');
+        }
+        if (todayYear === year && todayMonth === month && todayDate === d) {
+            dayDiv.classList.add('today');
+        }
+        elements.calendarDays.appendChild(dayDiv);
+    }
+    
+    // 3. Render next month padding days (filling up to 42 cells)
+    const totalSpaces = 42;
+    const currentRendered = firstDayIndex + numDays;
+    const nextMonthDaysCount = totalSpaces - currentRendered;
+    
+    for (let d = 1; d <= nextMonthDaysCount; d++) {
+        const nextMonthVal = month === 11 ? 0 : month + 1;
+        const nextYearVal = month === 11 ? year + 1 : year;
+        
+        const dayDiv = document.createElement('div');
+        dayDiv.className = 'calendar-day padding-day';
+        dayDiv.textContent = d;
+        
+        const dateStr = `${nextYearVal}-${String(nextMonthVal + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        if (checkedInDates.has(dateStr)) {
+            dayDiv.classList.add('marked');
+        }
+        if (todayYear === nextYearVal && todayMonth === nextMonthVal && todayDate === d) {
+            dayDiv.classList.add('today');
+        }
+        elements.calendarDays.appendChild(dayDiv);
     }
 }
 
