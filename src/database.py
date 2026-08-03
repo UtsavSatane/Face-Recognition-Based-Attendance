@@ -235,6 +235,9 @@ def log_attendance(user_id: int, liveness_method: str, db_path: str = "data/atte
                 classroom_folder = os.path.join(classrooms_base, f"{dept_sanitized}_{sec_sanitized}")
                 os.makedirs(classroom_folder, exist_ok=True)
                 
+                # Cumulative & Daily CSV display timestamp formatting
+                timestamp_display = timestamp_dt.strftime("%d/%m/%Y %H:%M:%S")
+                
                 # Append to cumulative attendance file
                 cumulative_csv = os.path.join(classroom_folder, "attendance.csv")
                 file_exists = os.path.exists(cumulative_csv)
@@ -243,12 +246,12 @@ def log_attendance(user_id: int, liveness_method: str, db_path: str = "data/atte
                         writer = csv.writer(f)
                         if not file_exists:
                             writer.writerow(["Timestamp", "Student ID", "Name", "Department", "Section", "Liveness Method"])
-                        writer.writerow([timestamp, user['login_id'], user['name'], user['department'], user['section'], liveness_method])
+                        writer.writerow([timestamp_display, user['login_id'], user['name'], user['department'], user['section'], liveness_method])
                 except Exception as e:
                     print(f"Error logging classroom cumulative attendance: {e}")
                 
                 # Append to daily attendance file
-                date_str = timestamp_dt.strftime("%Y-%m-%d")
+                date_str = timestamp_dt.strftime("%d-%m-%Y")
                 daily_csv = os.path.join(classroom_folder, f"attendance_{date_str}.csv")
                 daily_exists = os.path.exists(daily_csv)
                 try:
@@ -256,7 +259,7 @@ def log_attendance(user_id: int, liveness_method: str, db_path: str = "data/atte
                         writer = csv.writer(f)
                         if not daily_exists:
                             writer.writerow(["Timestamp", "Student ID", "Name", "Department", "Section", "Liveness Method"])
-                        writer.writerow([timestamp, user['login_id'], user['name'], user['department'], user['section'], liveness_method])
+                        writer.writerow([timestamp_display, user['login_id'], user['name'], user['department'], user['section'], liveness_method])
                 except Exception as e:
                     print(f"Error logging classroom daily attendance: {e}")
                     

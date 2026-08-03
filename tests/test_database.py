@@ -222,7 +222,7 @@ def test_classroom_attendance_logging():
         
     # Check daily CSV
     from datetime import datetime
-    date_str = datetime.now().strftime("%Y-%m-%d")
+    date_str = datetime.now().strftime("%d-%m-%Y")
     daily_csv_path = os.path.join(expected_folder, f"attendance_{date_str}.csv")
     assert os.path.exists(daily_csv_path)
 

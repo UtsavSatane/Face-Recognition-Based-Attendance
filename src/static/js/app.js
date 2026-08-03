@@ -883,7 +883,7 @@ function renderCalendar() {
         dayDiv.className = 'calendar-day padding-day';
         dayDiv.textContent = d;
         
-        const dateStr = `${prevYearVal}-${String(prevMonthVal + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        const dateStr = `${String(d).padStart(2, '0')}/${String(prevMonthVal + 1).padStart(2, '0')}/${prevYearVal}`;
         if (checkedInDates.has(dateStr)) {
             dayDiv.classList.add('marked');
         }
@@ -899,7 +899,7 @@ function renderCalendar() {
         dayDiv.className = 'calendar-day current-month';
         dayDiv.textContent = d;
         
-        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        const dateStr = `${String(d).padStart(2, '0')}/${String(month + 1).padStart(2, '0')}/${year}`;
         if (checkedInDates.has(dateStr)) {
             dayDiv.classList.add('marked');
         }
@@ -922,7 +922,7 @@ function renderCalendar() {
         dayDiv.className = 'calendar-day padding-day';
         dayDiv.textContent = d;
         
-        const dateStr = `${nextYearVal}-${String(nextMonthVal + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        const dateStr = `${String(d).padStart(2, '0')}/${String(nextMonthVal + 1).padStart(2, '0')}/${nextYearVal}`;
         if (checkedInDates.has(dateStr)) {
             dayDiv.classList.add('marked');
         }

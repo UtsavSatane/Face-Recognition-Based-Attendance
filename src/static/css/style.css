@@ -894,19 +894,20 @@ input[type="range"]::-webkit-slider-thumb:hover {
 
 /* Calendar Card Styles */
 .calendar-card {
-    margin-top: 2rem;
-    padding: 2rem;
+    margin-top: 1.5rem;
+    padding: 1.25rem;
+    max-width: 340px;
 }
 
 .calendar-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 1.5rem;
+    margin-bottom: 1rem;
 }
 
 .calendar-header h3 {
-    font-size: 1.25rem;
+    font-size: 1.1rem;
     font-weight: 600;
     color: var(--text-primary);
 }
@@ -915,8 +916,8 @@ input[type="range"]::-webkit-slider-thumb:hover {
     background: transparent;
     border: 1px solid var(--border-color);
     color: var(--text-secondary);
-    width: 34px;
-    height: 34px;
+    width: 30px;
+    height: 30px;
     border-radius: 50%;
     cursor: pointer;
     display: flex;
@@ -934,15 +935,15 @@ input[type="range"]::-webkit-slider-thumb:hover {
 .calendar-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
-    gap: 0.5rem;
+    gap: 0.25rem;
     text-align: center;
 }
 
 .calendar-day-header {
     color: var(--text-secondary);
     font-weight: 600;
-    font-size: 0.85rem;
-    padding: 0.5rem 0;
+    font-size: 0.8rem;
+    padding: 0.25rem 0;
     font-family: 'Outfit', sans-serif;
 }
 
@@ -951,7 +952,7 @@ input[type="range"]::-webkit-slider-thumb:hover {
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.95rem;
+    font-size: 0.85rem;
     font-weight: 500;
     color: var(--text-primary);
     border-radius: 50%;

@@ -176,7 +176,7 @@ def student_dashboard():
     for h in history:
         formatted_history.append({
             "id": h["id"],
-            "timestamp": datetime.strptime(h["timestamp"], "%Y-%m-%d %H:%M:%S").strftime("%Y-%m-%d %I:%M %p"),
+            "timestamp": datetime.strptime(h["timestamp"], "%Y-%m-%d %H:%M:%S").strftime("%d/%m/%Y %I:%M %p"),
             "liveness_method": h["liveness_method"]
         })
         
@@ -349,7 +349,7 @@ def admin_get_reports():
         formatted_logs.append({
             "id": l["id"],
             "name": l["name"],
-            "timestamp": datetime.strptime(l["timestamp"], "%Y-%m-%d %H:%M:%S").strftime("%Y-%m-%d %I:%M:%S %p"),
+            "timestamp": datetime.strptime(l["timestamp"], "%Y-%m-%d %H:%M:%S").strftime("%d/%m/%Y %I:%M:%S %p"),
             "liveness_method": l["liveness_method"]
         })
         
@@ -359,6 +359,7 @@ def admin_get_reports():
         "logs": formatted_logs
     })
 
+# ----------------- ADMIN EXPORT CSV REPORT API -----------------
 @app.route('/api/admin/download_report', methods=['GET'])
 def admin_download_report():
     import csv
@@ -372,7 +373,7 @@ def admin_download_report():
     writer.writerow(["Log ID", "Student Name", "Timestamp", "Liveness Mode"])
     
     for l in logs:
-        timestamp_formatted = datetime.strptime(l["timestamp"], "%Y-%m-%d %H:%M:%S").strftime("%Y-%m-%d %I:%M:%S %p")
+        timestamp_formatted = datetime.strptime(l["timestamp"], "%Y-%m-%d %H:%M:%S").strftime("%d/%m/%Y %I:%M:%S %p")
         writer.writerow([l["id"], l["name"], timestamp_formatted, l["liveness_method"]])
         
     output.seek(0)
@@ -382,7 +383,7 @@ def admin_download_report():
     bytes_io.write(output.getvalue().encode('utf-8'))
     bytes_io.seek(0)
     
-    date_str = get_ist_now().strftime("%Y-%m-%d")
+    date_str = get_ist_now().strftime("%d-%m-%Y")
     return send_file(
         bytes_io,
         mimetype="text/csv",
@@ -429,6 +430,11 @@ def student_reset_with_otp():
 def admin_get_reset_requests():
     try:
         requests_list = get_reset_requests()
+        for r in requests_list:
+            if r.get("created_at"):
+                r["created_at"] = datetime.strptime(r["created_at"], "%Y-%m-%d %H:%M:%S").strftime("%d/%m/%Y %I:%M:%S %p")
+            if r.get("approved_at"):
+                r["approved_at"] = datetime.strptime(r["approved_at"], "%Y-%m-%d %H:%M:%S").strftime("%d/%m/%Y %I:%M:%S %p")
         return jsonify(requests_list)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
