@@ -995,4 +995,28 @@ input[type="range"]::-webkit-slider-thumb:hover {
     box-shadow: inset 0 0 0 2px var(--bg-secondary), 0 4px 10px rgba(16, 185, 129, 0.3);
 }
 
+/* Calendar & Graph Side-by-Side Layout */
+.calendar-graph-split {
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    gap: 1.5rem;
+    margin-top: 1.5rem;
+    align-items: stretch;
+}
 
+.graph-card {
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    flex-grow: 1;
+}
+
+@media (max-width: 1200px) {
+    .calendar-graph-split {
+        grid-template-columns: 1fr;
+    }
+    .calendar-card {
+        max-width: 100% !important;
+    }
+}

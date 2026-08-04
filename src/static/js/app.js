@@ -32,7 +32,8 @@ let state = {
     // Calendar specific states
     calendarYear: new Date().getFullYear(),
     calendarMonth: new Date().getMonth(),
-    studentAttendanceHistory: []
+    studentAttendanceHistory: [],
+    attendanceChart: null
 };
 
 // DOM Elements
@@ -91,6 +92,10 @@ const elements = {
     calendarDays: document.getElementById('calendar-days'),
     calendarPrev: document.getElementById('calendar-prev'),
     calendarNext: document.getElementById('calendar-next'),
+    
+    // Graph elements
+    chartYear: document.getElementById('chart-year'),
+    attendanceChartCanvas: document.getElementById('student-attendance-chart'),
     
     // Admin elements
     adminLoginForm: document.getElementById('admin-login-form'),
@@ -362,6 +367,9 @@ function setupThemeToggle() {
     themeToggleBtn.addEventListener('click', () => {
         const isCurrentLight = document.documentElement.classList.contains('light-theme');
         setLightMode(!isCurrentLight);
+        if (state.studentUser && document.getElementById('student-attendance-chart')) {
+            renderAttendanceChart();
+        }
     });
 }
 
@@ -931,6 +939,136 @@ function renderCalendar() {
         }
         elements.calendarDays.appendChild(dayDiv);
     }
+    
+    // Render attendance chart alongside calendar
+    renderAttendanceChart();
+}
+
+
+// Generate and render the monthly attendance chart for the student portal
+function renderAttendanceChart() {
+    if (!elements.attendanceChartCanvas) return;
+    
+    const year = state.calendarYear;
+    if (elements.chartYear) {
+        elements.chartYear.textContent = year;
+    }
+    
+    // Calculate counts for each month (0 = Jan, 11 = Dec)
+    const monthlyCounts = new Array(12).fill(0);
+    
+    state.studentAttendanceHistory.forEach(log => {
+        if (log.timestamp) {
+            // timestamp format: "DD/MM/YYYY hh:mm AM/PM"
+            const parts = log.timestamp.split(' ')[0].split('/');
+            if (parts.length === 3) {
+                const logMonth = parseInt(parts[1], 10) - 1; // 0-indexed month
+                const logYear = parseInt(parts[2], 10);
+                if (logYear === year && logMonth >= 0 && logMonth < 12) {
+                    monthlyCounts[logMonth]++;
+                }
+            }
+        }
+    });
+    
+    // Theme-dependent colors for a premium chart aesthetic
+    const isLight = document.documentElement.classList.contains('light-theme');
+    const textColor = isLight ? '#475569' : '#94a3b8';
+    const gridColor = isLight ? 'rgba(15, 23, 42, 0.08)' : 'rgba(255, 255, 255, 0.08)';
+    const tooltipBg = isLight ? '#ffffff' : '#1e293b';
+    const tooltipText = isLight ? '#0f172a' : '#f8fafc';
+    const tooltipBorder = isLight ? 'rgba(15, 23, 42, 0.1)' : 'rgba(255, 255, 255, 0.1)';
+    
+    const ctx = elements.attendanceChartCanvas.getContext('2d');
+    
+    // Create elegant gradient for bars
+    const gradient = ctx.createLinearGradient(0, 0, 0, 220);
+    gradient.addColorStop(0, 'rgba(99, 102, 241, 0.85)'); // indigo/purple theme
+    gradient.addColorStop(1, 'rgba(139, 92, 246, 0.2)');
+    
+    const borderGradient = ctx.createLinearGradient(0, 0, 0, 220);
+    borderGradient.addColorStop(0, 'rgba(99, 102, 241, 1)');
+    borderGradient.addColorStop(1, 'rgba(139, 92, 246, 0.5)');
+
+    // Destroy existing chart instance if it exists
+    if (state.attendanceChart) {
+        state.attendanceChart.destroy();
+    }
+    
+    // Create new Chart instance
+    state.attendanceChart = new Chart(elements.attendanceChartCanvas, {
+        type: 'bar',
+        data: {
+            labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+            datasets: [{
+                label: 'Present Days',
+                data: monthlyCounts,
+                backgroundColor: gradient,
+                borderColor: borderGradient,
+                borderWidth: 1.5,
+                borderRadius: 6,
+                borderSkipped: false,
+                maxBarThickness: 24
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false // hide legend to keep clean styling
+                },
+                tooltip: {
+                    backgroundColor: tooltipBg,
+                    titleColor: tooltipText,
+                    bodyColor: tooltipText,
+                    borderColor: tooltipBorder,
+                    borderWidth: 1,
+                    padding: 10,
+                    displayColors: false,
+                    callbacks: {
+                        label: function(context) {
+                            return ` Present: ${context.parsed.y} day(s)`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: {
+                        display: false
+                    },
+                    ticks: {
+                        color: textColor,
+                        font: {
+                            family: 'Inter, sans-serif',
+                            size: 11,
+                            weight: '500'
+                        }
+                    }
+                },
+                y: {
+                    grid: {
+                        color: gridColor,
+                        drawTicks: false
+                    },
+                    border: {
+                        dash: [4, 4]
+                    },
+                    ticks: {
+                        color: textColor,
+                        precision: 0,
+                        font: {
+                            family: 'Inter, sans-serif',
+                            size: 11
+                        }
+                    },
+                    min: 0,
+                    suggestedMax: Math.max(...monthlyCounts, 5) + 1
+                }
+            }
+        }
+    });
 }
 
 // ----------------- ADMIN PORTAL -----------------
