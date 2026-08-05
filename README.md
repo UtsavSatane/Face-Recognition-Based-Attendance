@@ -8,7 +8,7 @@
 ![Docker](https://img.shields.io/badge/Docker-Supported-2496ED)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
-BioAccess is a modern face recognition attendance platform featuring **real-time facial recognition**, **anti-spoofing liveness detection**, **role-based authentication**, and a **responsive Flask web interface**. It is designed for educational institutions and organizations requiring secure, contactless attendance.
+BioAccess is a modern AI- Based face recognition attendance platform featuring **real-time facial recognition**, **anti-spoofing liveness detection**, **role-based authentication**, and a **responsive Flask web interface**. It is designed for educational institutions and organizations requiring secure, contactless attendance.
 
 ---
 
