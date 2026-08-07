@@ -17,16 +17,20 @@ BioAccess is a modern AI- Based face recognition attendance platform featuring *
 > Replace the placeholders below with your screenshots.
 
 ## 🏠 Home Portal
-![Home](screenshots/home.png)
+<img width="1843" height="940" alt="Screenshot 2026-08-03 121745" src="https://github.com/user-attachments/assets/b4c16b70-7b19-43fa-ac99-caee3eb7691a" />
+
 
 ## 📷 Kiosk Mode
-![Kiosk](screenshots/kiosk.png)
+<img width="1557" height="935" alt="Screenshot 2026-08-03 121913" src="https://github.com/user-attachments/assets/17781309-2b24-445f-a516-8f25c62b2109" />
+
 
 ## 🎓 Student Login
-![Student Login](screenshots/student-login.png)
+<img width="1375" height="687" alt="Screenshot 2026-08-03 121923" src="https://github.com/user-attachments/assets/dbe207ad-4ac8-4064-bbdb-22fc83fc1308" />
+
 
 ## 📊 Student Dashboard
-![Student Dashboard](screenshots/student-dashboard.png)
+<img width="1447" height="940" alt="Screenshot 2026-08-03 121939" src="https://github.com/user-attachments/assets/aa82d49b-8026-49bf-a682-adafd6627af3" />
+
 
 ## 👨‍💼 Admin Login
 ![Admin Login](screenshots/admin-login.png)
