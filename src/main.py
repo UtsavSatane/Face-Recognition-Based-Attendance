@@ -27,7 +27,7 @@ template_dir = os.path.join(base_dir, 'templates')
 static_dir = os.path.join(base_dir, 'static')
 
 app = Flask(__name__, template_folder=template_dir, static_folder=static_dir)
-app.secret_key = "bioaccess_secure_face_attendance_key"
+app.secret_key = "veriface_secure_face_attendance_key"
 
 # Initialize AI models globally
 detector = FaceDetector()
