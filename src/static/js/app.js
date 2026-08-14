@@ -749,6 +749,72 @@ function setupStudentAuth() {
     });
 }
 
+// Helper to extract initials for student avatar
+function getInitials(name) {
+    if (!name) return '??';
+    const parts = name.trim().split(/\s+/);
+    if (parts.length === 0) return '??';
+    if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+}
+
+// Helper to compute consecutive present days streak
+function calculateStreak(history) {
+    if (!history || history.length === 0) return 0;
+    
+    // Extract unique dates of check-ins formatted as YYYY-MM-DD
+    const presentDates = new Set();
+    history.forEach(log => {
+        if (log.timestamp) {
+            const parts = log.timestamp.split(' ')[0].split('/');
+            if (parts.length === 3) {
+                const day = parts[0].padStart(2, '0');
+                const month = parts[1].padStart(2, '0');
+                const year = parts[2];
+                presentDates.add(`${year}-${month}-${day}`);
+            }
+        }
+    });
+    
+    function formatDateStr(date) {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    }
+    
+    const today = new Date();
+    const todayStr = formatDateStr(today);
+    
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = formatDateStr(yesterday);
+    
+    let streak = 0;
+    let checkDate = new Date();
+    
+    if (presentDates.has(todayStr)) {
+        checkDate = today;
+    } else if (presentDates.has(yesterdayStr)) {
+        checkDate = yesterday;
+    } else {
+        return 0;
+    }
+    
+    while (true) {
+        const dateStr = formatDateStr(checkDate);
+        if (presentDates.has(dateStr)) {
+            streak++;
+            // Move checkDate backward by 1 day
+            checkDate.setDate(checkDate.getDate() - 1);
+        } else {
+            break;
+        }
+    }
+    
+    return streak;
+}
+
 async function showStudentDashboard() {
     elements.studentLoginView.style.display = 'none';
     elements.studentDashboard.style.display = 'block';
@@ -758,6 +824,12 @@ async function showStudentDashboard() {
     elements.studentLoginId.textContent = state.studentUser.login_id;
     elements.studentDept.textContent = state.studentUser.department || 'N/A';
     elements.studentSec.textContent = state.studentUser.section || 'N/A';
+    
+    // Set avatar initials
+    const avatarEl = document.getElementById('student-avatar');
+    if (avatarEl) {
+        avatarEl.textContent = getInitials(state.studentUser.name);
+    }
     
     // Fetch and populate dashboard logs
     try {
@@ -776,6 +848,61 @@ async function showStudentDashboard() {
         } else {
             elements.studentTodayStatus.innerHTML = '<span class="badge badge-danger">○ Absent / Pending</span>';
             elements.studentTodayTime.textContent = 'Your attendance has not been recorded yet.';
+        }
+        
+        // Compute statistics
+        const history = data.history || [];
+        const now = new Date();
+        const curMonth = now.getMonth();
+        const curYear = now.getFullYear();
+        
+        // Unique present days in current month
+        const currentMonthDays = new Set();
+        history.forEach(log => {
+            if (log.timestamp) {
+                const dateParts = log.timestamp.split(' ')[0].split('/');
+                if (dateParts.length === 3) {
+                    const day = parseInt(dateParts[0], 10);
+                    const month = parseInt(dateParts[1], 10) - 1;
+                    const year = parseInt(dateParts[2], 10);
+                    if (month === curMonth && year === curYear) {
+                        currentMonthDays.add(`${day}/${month + 1}/${year}`);
+                    }
+                }
+            }
+        });
+        
+        const presentDaysThisMonth = currentMonthDays.size;
+        
+        // Count weekdays elapsed in the current month up to today
+        let weekdaysElapsed = 0;
+        const tempDate = new Date(curYear, curMonth, 1);
+        const todayDateNum = now.getDate();
+        for (let d = 1; d <= todayDateNum; d++) {
+            tempDate.setDate(d);
+            const dayOfWeek = tempDate.getDay();
+            if (dayOfWeek !== 0 && dayOfWeek !== 6) { // Monday-Friday
+                weekdaysElapsed++;
+            }
+        }
+        
+        if (weekdaysElapsed === 0) weekdaysElapsed = 1;
+        const attendanceRate = Math.min(100, Math.round((presentDaysThisMonth / weekdaysElapsed) * 100));
+        
+        // Update stats cards
+        const rateEl = document.getElementById('student-attendance-rate');
+        const rateSubtextEl = document.getElementById('student-attendance-rate-subtext');
+        if (rateEl) {
+            rateEl.textContent = `${attendanceRate}%`;
+        }
+        if (rateSubtextEl) {
+            rateSubtextEl.textContent = `${presentDaysThisMonth} day${presentDaysThisMonth === 1 ? '' : 's'} present this month`;
+        }
+        
+        const streak = calculateStreak(history);
+        const streakEl = document.getElementById('student-attendance-streak');
+        if (streakEl) {
+            streakEl.textContent = `${streak} Day${streak === 1 ? '' : 's'}`;
         }
         
         // History table

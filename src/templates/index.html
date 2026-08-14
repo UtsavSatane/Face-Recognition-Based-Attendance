@@ -188,72 +188,72 @@
                     <p class="view-subtitle">Browse your record statistics and daily verification status.</p>
                 </div>
                 
-                <div class="layout-split">
-                    <!-- Left: Profile Details -->
-                    <aside>
-                        <div class="profile-card">
-                            <h3><i class="fas fa-user-circle"></i> Profile Details</h3>
-                            <div class="profile-detail">
-                                <span class="profile-label">Name</span>
-                                <span class="profile-value" id="student-name">...</span>
+                <!-- New Profile Banner Card -->
+                <div class="profile-banner-card glass-card">
+                    <div class="profile-banner-left">
+                        <div class="profile-avatar" id="student-avatar">??</div>
+                        <div class="profile-info-block">
+                            <h2 id="student-name">...</h2>
+                            <div class="profile-badges-row">
+                                <span class="profile-badge-tag"><i class="fas fa-id-card"></i> ID: <span id="student-login-id">...</span></span>
+                                <span class="profile-badge-tag"><i class="fas fa-graduation-cap"></i> <span id="student-dept">...</span></span>
+                                <span class="profile-badge-tag"><i class="fas fa-layer-group"></i> Sec: <span id="student-sec">...</span></span>
                             </div>
-                            <div class="profile-detail">
-                                <span class="profile-label">Login ID</span>
-                                <span class="profile-value" id="student-login-id">...</span>
-                            </div>
-                            <div class="profile-detail">
-                                <span class="profile-label">Department</span>
-                                <span class="profile-value" id="student-dept">...</span>
-                            </div>
-                            <div class="profile-detail">
-                                <span class="profile-label">Section</span>
-                                <span class="profile-value" id="student-sec">...</span>
-                            </div>
-                            <button class="btn-primary" id="student-logout" style="width: 100%; margin-top: 1.5rem; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); color: var(--text-secondary);"><i class="fas fa-unlock"></i> Logout</button>
                         </div>
-                        
-                        <!-- Calendar & Graph Container -->
-                        <div class="calendar-graph-split">
-                            <!-- Attendance Calendar -->
-                            <div class="glass-card calendar-card" style="margin-top: 0; margin-bottom: 0;">
-                                <div class="calendar-header">
-                                    <button type="button" id="calendar-prev" class="calendar-nav-btn" title="Previous Month">
-                                        <i class="fas fa-chevron-left"></i>
-                                    </button>
-                                    <h3 id="calendar-month-year">August 2026</h3>
-                                    <button type="button" id="calendar-next" class="calendar-nav-btn" title="Next Month">
-                                        <i class="fas fa-chevron-right"></i>
-                                    </button>
-                                </div>
-                                <div class="calendar-grid" id="calendar-days">
-                                    <!-- Filled by JS -->
-                                </div>
-                            </div>
+                    </div>
+                    <div class="profile-banner-right">
+                        <button class="btn-logout" id="student-logout"><i class="fas fa-sign-out-alt"></i> Logout</button>
+                    </div>
+                </div>
 
-                            <!-- Attendance Graph -->
-                            <div class="glass-card graph-card" style="margin-bottom: 0;">
-                                <h3 style="margin-bottom: 1rem; color: var(--accent-primary); font-size: 1.2rem; display: flex; align-items: center; gap: 0.5rem;">
-                                    <i class="fas fa-chart-bar"></i> Attendance Trend (<span id="chart-year">...</span>)
-                                </h3>
-                                <div class="chart-container" style="position: relative; height: 220px; width: 100%;">
-                                    <canvas id="student-attendance-chart"></canvas>
-                                </div>
-                            </div>
+                <!-- New Stats Grid -->
+                <div class="student-stats-grid">
+                    <!-- Today's Status Card -->
+                    <div class="stat-card glass-card">
+                        <div class="stat-icon-wrapper pulse-blue">
+                            <i class="fas fa-calendar-check"></i>
                         </div>
-                    </aside>
-                    
-                    <!-- Right: Today status & history table -->
-                    <section>
-                        <div class="glass-card">
-                            <h3 style="margin-bottom: 1.25rem;">Today's Attendance Status</h3>
-                            <div class="metric-card" style="margin-bottom: 1rem;">
-                                <div class="metric-title" id="student-today-status">...</div>
-                                <div class="metric-value" id="student-today-time" style="font-size: 1rem; color: var(--text-secondary); margin-top: 0.5rem;">...</div>
-                            </div>
+                        <div class="stat-details">
+                            <span class="stat-label">Today's Status</span>
+                            <div id="student-today-status" class="stat-value-badge">...</div>
+                            <span id="student-today-time" class="stat-subtext">...</span>
                         </div>
-                        
+                    </div>
+
+                    <!-- Attendance Rate Card -->
+                    <div class="stat-card glass-card">
+                        <div class="stat-icon-wrapper pulse-green">
+                            <i class="fas fa-chart-pie"></i>
+                        </div>
+                        <div class="stat-details">
+                            <span class="stat-label">Attendance Rate</span>
+                            <span id="student-attendance-rate" class="stat-value">0%</span>
+                            <span id="student-attendance-rate-subtext" class="stat-subtext">Present this month</span>
+                        </div>
+                    </div>
+
+                    <!-- Streak Card -->
+                    <div class="stat-card glass-card">
+                        <div class="stat-icon-wrapper pulse-purple">
+                            <i class="fas fa-fire"></i>
+                        </div>
+                        <div class="stat-details">
+                            <span class="stat-label">Active Streak</span>
+                            <span id="student-attendance-streak" class="stat-value">0 Days</span>
+                            <span class="stat-subtext">Consecutive present days</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Main Grid Layout -->
+                <div class="dashboard-main-grid">
+                    <!-- Left Column: History & Trend Chart -->
+                    <div class="dashboard-left-col">
+                        <!-- History Card -->
                         <div class="glass-card">
-                            <h3 style="margin-bottom: 1.25rem;">Personal Attendance History</h3>
+                            <div class="card-header-with-icon">
+                                <h3><i class="fas fa-history"></i> Attendance History</h3>
+                            </div>
                             <div class="table-container">
                                 <table>
                                     <thead>
@@ -269,7 +269,46 @@
                                 </table>
                             </div>
                         </div>
-                    </section>
+
+                        <!-- Chart Card -->
+                        <div class="glass-card">
+                            <div class="card-header-with-icon">
+                                <h3><i class="fas fa-chart-bar"></i> Attendance Trend (<span id="chart-year">...</span>)</h3>
+                            </div>
+                            <div class="chart-container" style="position: relative; height: 240px; width: 100%;">
+                                <canvas id="student-attendance-chart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right Column: Interactive Calendar -->
+                    <div class="dashboard-right-col">
+                        <div class="glass-card calendar-card-enhanced">
+                            <div class="card-header-with-icon" style="margin-bottom: 1.5rem;">
+                                <h3><i class="fas fa-calendar-alt"></i> Attendance Calendar</h3>
+                            </div>
+                            <div class="calendar-header">
+                                <button type="button" id="calendar-prev" class="calendar-nav-btn" title="Previous Month">
+                                    <i class="fas fa-chevron-left"></i>
+                                </button>
+                                <h3 id="calendar-month-year">...</h3>
+                                <button type="button" id="calendar-next" class="calendar-nav-btn" title="Next Month">
+                                    <i class="fas fa-chevron-right"></i>
+                                </button>
+                            </div>
+                            <div class="calendar-grid" id="calendar-days">
+                                <!-- Filled by JS -->
+                            </div>
+                            <div class="calendar-legend" style="margin-top: 1.5rem; display: flex; gap: 1rem; font-size: 0.8rem; color: var(--text-secondary); justify-content: center;">
+                                <div style="display: flex; align-items: center; gap: 0.25rem;">
+                                    <span style="width: 10px; height: 10px; border-radius: 50%; background: var(--success); display: inline-block;"></span> Present
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 0.25rem;">
+                                    <span style="width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--accent-primary); display: inline-block;"></span> Today
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </main>
